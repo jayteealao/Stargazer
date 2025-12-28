@@ -4,9 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateListOf
 import androidx.activity.compose.BackHandler
-import androidx.navigation3.NavDisplay
-import androidx.navigation3.NavEntry
-import androidx.navigation3.entryProvider
+import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.entryProvider
 import uk.adedamola.stargazer.ui.screens.DetailScreen
 import uk.adedamola.stargazer.ui.screens.HomeScreen
 
