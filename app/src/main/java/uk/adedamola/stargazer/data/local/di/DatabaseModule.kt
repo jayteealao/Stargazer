@@ -25,7 +25,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.RepositoryDao
+import uk.adedamola.stargazer.data.local.database.RepositoryTagDao
+import uk.adedamola.stargazer.data.local.database.SearchPresetDao
 import uk.adedamola.stargazer.data.local.database.StargazerDao
+import uk.adedamola.stargazer.data.local.database.TagDao
 import javax.inject.Singleton
 
 
@@ -40,6 +43,21 @@ class DatabaseModule {
     @Provides
     fun provideRepositoryDao(appDatabase: AppDatabase): RepositoryDao {
         return appDatabase.repositoryDao()
+    }
+
+    @Provides
+    fun provideTagDao(appDatabase: AppDatabase): TagDao {
+        return appDatabase.tagDao()
+    }
+
+    @Provides
+    fun provideRepositoryTagDao(appDatabase: AppDatabase): RepositoryTagDao {
+        return appDatabase.repositoryTagDao()
+    }
+
+    @Provides
+    fun provideSearchPresetDao(appDatabase: AppDatabase): SearchPresetDao {
+        return appDatabase.searchPresetDao()
     }
 
     @Provides

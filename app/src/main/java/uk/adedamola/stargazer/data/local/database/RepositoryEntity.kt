@@ -33,7 +33,9 @@ data class RepositoryEntity(
     val topics: String, // Stored as comma-separated string
     val visibility: String,
     val licenseName: String?,
-    val cachedAt: Long = System.currentTimeMillis()
+    val cachedAt: Long = System.currentTimeMillis(),
+    val isFavorite: Boolean = false,
+    val isPinned: Boolean = false
 )
 
 @Dao
@@ -61,4 +63,46 @@ interface RepositoryDao {
 
     @Query("DELETE FROM repositories WHERE cachedAt < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long)
+
+    // Favorites and Pinned
+    @Query("UPDATE repositories SET isFavorite = :isFavorite WHERE id = :id")
+    suspend fun updateFavorite(id: Int, isFavorite: Boolean)
+
+    @Query("UPDATE repositories SET isPinned = :isPinned WHERE id = :id")
+    suspend fun updatePinned(id: Int, isPinned: Boolean)
+
+    @Query("SELECT * FROM repositories WHERE isFavorite = 1 ORDER BY stargazersCount DESC")
+    fun getFavoriteRepositories(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories WHERE isPinned = 1 ORDER BY stargazersCount DESC")
+    fun getPinnedRepositories(): Flow<List<RepositoryEntity>>
+
+    // Sorting options
+    @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
+    fun getRepositoriesByStars(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories ORDER BY forksCount DESC")
+    fun getRepositoriesByForks(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories ORDER BY updatedAt DESC")
+    fun getRepositoriesByUpdated(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories ORDER BY createdAt DESC")
+    fun getRepositoriesByCreated(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories ORDER BY name ASC")
+    fun getRepositoriesByName(): Flow<List<RepositoryEntity>>
+
+    // Advanced filters
+    @Query("SELECT * FROM repositories WHERE description IS NOT NULL AND description != ''")
+    fun getRepositoriesWithDescription(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories WHERE homepage IS NOT NULL AND homepage != ''")
+    fun getRepositoriesWithHomepage(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories WHERE topics != ''")
+    fun getRepositoriesWithTopics(): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories WHERE stargazersCount >= :minStars AND stargazersCount <= :maxStars")
+    fun getRepositoriesByStarRange(minStars: Int, maxStars: Int): Flow<List<RepositoryEntity>>
 }
