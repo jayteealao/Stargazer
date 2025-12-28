@@ -27,6 +27,17 @@ class GitHubRepositoryImpl @Inject constructor(
         private const val INITIAL_BACKOFF_MS = 1000L
         private const val RATE_LIMIT_STATUS_CODE = 403
         private const val RATE_LIMIT_RETRY_AFTER_MS = 60000L // 1 minute
+        private const val CACHE_TTL_MS = 60 * 60 * 1000L // 1 hour
+    }
+
+    /**
+     * Checks if cached data is still fresh based on TTL.
+     * @param cachedAt Timestamp when data was cached
+     * @return true if cache is still valid, false if stale or expired
+     */
+    private fun isCacheValid(cachedAt: Long): Boolean {
+        val now = System.currentTimeMillis()
+        return (now - cachedAt) < CACHE_TTL_MS
     }
 
     /**
@@ -97,63 +108,108 @@ class GitHubRepositoryImpl @Inject constructor(
 
     /**
      * Retrieves all starred repositories for the authenticated user.
-     * Implements pagination to fetch all starred repos regardless of count.
-     * Uses caching strategy: returns cached data first (if available and not forcing refresh),
-     * then fetches from API and updates cache.
+     * Implements a local-first strategy:
+     * - CACHE_FIRST: Returns cached data immediately if fresh, background refresh if stale
+     * - NETWORK_FIRST: Fetches from API, falls back to cache on error
+     * - FORCE_REFRESH: Always fetches from API with loading state
      *
-     * @param forceRefresh If true, skips cache and always fetches from API
+     * @param cachePolicy The caching strategy to use
      * @return Flow emitting Result states (Loading, Success, or Error)
      */
-    override fun getStarredRepositories(forceRefresh: Boolean): Flow<Result<List<GitHubRepoModel>>> = flow {
-        emit(Result.Loading)
+    override fun getStarredRepositories(cachePolicy: CachePolicy): Flow<Result<List<GitHubRepoModel>>> = flow {
+        val cachedRepos = repositoryDao.getAllRepositories().first()
+        val hasCache = cachedRepos.isNotEmpty()
+        val cacheIsFresh = hasCache && isCacheValid(cachedRepos.first().cachedAt)
 
-        try {
-            // If not forcing refresh, try to get from cache first
-            if (!forceRefresh) {
-                val cachedRepos = repositoryDao.getAllRepositories().first()
-                if (cachedRepos.isNotEmpty()) {
+        when (cachePolicy) {
+            CachePolicy.CACHE_FIRST -> {
+                if (hasCache && cacheIsFresh) {
+                    // Cache is fresh - emit and return, no API call needed
                     emit(Result.Success(cachedRepos.map { it.toDomainModel() }))
-                }
-            }
-
-            // Fetch all pages from API
-            val allRepos = mutableListOf<GitHubRepoModel>()
-            var page = 1
-            var hasMore = true
-
-            while (hasMore) {
-                val pageRepos = retryWithBackoff {
-                    apiService.getStarredRepositories(page = page, perPage = 100)
-                }
-                if (pageRepos.isEmpty()) {
-                    hasMore = false
+                    return@flow
+                } else if (hasCache) {
+                    // Cache exists but stale - emit cached data immediately, then refresh
+                    emit(Result.Success(cachedRepos.map { it.toDomainModel() }))
+                    // Background refresh - fetch and emit updated data
+                    try {
+                        val freshRepos = fetchAllFromApi()
+                        emit(Result.Success(freshRepos))
+                    } catch (e: Exception) {
+                        // Silent fail - we already showed cached data
+                    }
                 } else {
-                    allRepos.addAll(pageRepos)
-                    page++
-                    // GitHub API max is 100 items per page
-                    // If we got less than 100, we're on the last page
-                    if (pageRepos.size < 100) {
-                        hasMore = false
+                    // No cache - must fetch from network
+                    emit(Result.Loading)
+                    try {
+                        val freshRepos = fetchAllFromApi()
+                        emit(Result.Success(freshRepos))
+                    } catch (e: Exception) {
+                        val userMessage = getUserFriendlyErrorMessage(e)
+                        emit(Result.Error(Exception(userMessage, e)))
                     }
                 }
             }
-
-            // Cache the results
-            repositoryDao.deleteAll()
-            repositoryDao.insertRepositories(allRepos.map { it.toEntity() })
-
-            // Emit the fresh data
-            emit(Result.Success(allRepos))
-        } catch (e: Exception) {
-            // If API fails, try to return cached data
-            val cachedRepos = repositoryDao.getAllRepositories().first()
-            if (cachedRepos.isNotEmpty()) {
-                emit(Result.Success(cachedRepos.map { it.toDomainModel() }))
-            } else {
-                val userMessage = getUserFriendlyErrorMessage(e)
-                emit(Result.Error(Exception(userMessage, e)))
+            CachePolicy.NETWORK_FIRST -> {
+                emit(Result.Loading)
+                try {
+                    val freshRepos = fetchAllFromApi()
+                    emit(Result.Success(freshRepos))
+                } catch (e: Exception) {
+                    // Fallback to cache on network error
+                    if (hasCache) {
+                        emit(Result.Success(cachedRepos.map { it.toDomainModel() }))
+                    } else {
+                        val userMessage = getUserFriendlyErrorMessage(e)
+                        emit(Result.Error(Exception(userMessage, e)))
+                    }
+                }
+            }
+            CachePolicy.FORCE_REFRESH -> {
+                emit(Result.Loading)
+                try {
+                    val freshRepos = fetchAllFromApi()
+                    emit(Result.Success(freshRepos))
+                } catch (e: Exception) {
+                    // On force refresh, still fallback to cache if available
+                    if (hasCache) {
+                        emit(Result.Success(cachedRepos.map { it.toDomainModel() }))
+                    } else {
+                        val userMessage = getUserFriendlyErrorMessage(e)
+                        emit(Result.Error(Exception(userMessage, e)))
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * Fetches all starred repositories from the API with pagination and caches the results.
+     */
+    private suspend fun fetchAllFromApi(): List<GitHubRepoModel> {
+        val allRepos = mutableListOf<GitHubRepoModel>()
+        var page = 1
+        var hasMore = true
+
+        while (hasMore) {
+            val pageRepos = retryWithBackoff {
+                apiService.getStarredRepositories(page = page, perPage = 100)
+            }
+            if (pageRepos.isEmpty()) {
+                hasMore = false
+            } else {
+                allRepos.addAll(pageRepos)
+                page++
+                if (pageRepos.size < 100) {
+                    hasMore = false
+                }
+            }
+        }
+
+        // Cache the results
+        repositoryDao.deleteAll()
+        repositoryDao.insertRepositories(allRepos.map { it.toEntity() })
+
+        return allRepos
     }
 
     override fun searchRepositories(query: String): Flow<Result<List<GitHubRepoModel>>> {
@@ -182,28 +238,7 @@ class GitHubRepositoryImpl @Inject constructor(
 
     override suspend fun refreshStarredRepositories(): Result<Unit> {
         return try {
-            // Fetch all pages
-            val allRepos = mutableListOf<GitHubRepoModel>()
-            var page = 1
-            var hasMore = true
-
-            while (hasMore) {
-                val pageRepos = retryWithBackoff {
-                    apiService.getStarredRepositories(page = page, perPage = 100)
-                }
-                if (pageRepos.isEmpty()) {
-                    hasMore = false
-                } else {
-                    allRepos.addAll(pageRepos)
-                    page++
-                    if (pageRepos.size < 100) {
-                        hasMore = false
-                    }
-                }
-            }
-
-            repositoryDao.deleteAll()
-            repositoryDao.insertRepositories(allRepos.map { it.toEntity() })
+            fetchAllFromApi()
             Result.Success(Unit)
         } catch (e: Exception) {
             val userMessage = getUserFriendlyErrorMessage(e)

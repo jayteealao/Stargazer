@@ -15,6 +15,7 @@ import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.mappers.toDomainModel
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
+import uk.adedamola.stargazer.data.repository.CachePolicy
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.Result
@@ -83,14 +84,13 @@ class HomeViewModel @Inject constructor(
         loadRepositories()
     }
 
-    fun loadRepositories(forceRefresh: Boolean = false) {
+    fun loadRepositories(cachePolicy: CachePolicy = CachePolicy.CACHE_FIRST) {
         viewModelScope.launch {
             // Combine filters
             val favoritesOnly = _showFavoritesOnly.value
             val pinnedOnly = _showPinnedOnly.value
             val language = _selectedLanguage.value
             val tagId = _selectedTagId.value
-            val sortBy = _sortOption.value
             val query = _searchQuery.value
 
             when {
@@ -132,7 +132,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 else -> {
-                    gitHubRepository.getStarredRepositories(forceRefresh).collect { result ->
+                    gitHubRepository.getStarredRepositories(cachePolicy).collect { result ->
                         when (result) {
                             is Result.Loading -> _uiState.value = HomeUiState.Loading
                             is Result.Success -> loadRepositoryStates(result.data)
@@ -162,7 +162,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        loadRepositories(forceRefresh = true)
+        loadRepositories(cachePolicy = CachePolicy.FORCE_REFRESH)
     }
 
     fun onSearchQueryChange(query: String) {
