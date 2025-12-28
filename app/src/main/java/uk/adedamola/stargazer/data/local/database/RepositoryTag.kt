@@ -3,6 +3,7 @@ package uk.adedamola.stargazer.data.local.database
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -24,6 +25,10 @@ import kotlinx.coroutines.flow.Flow
             childColumns = ["tagId"],
             onDelete = ForeignKey.CASCADE
         )
+    ],
+    indices = [
+        Index(value = ["repositoryId"]),
+        Index(value = ["tagId"])
     ]
 )
 data class RepositoryTag(

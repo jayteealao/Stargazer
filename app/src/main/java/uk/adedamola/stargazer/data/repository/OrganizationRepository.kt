@@ -16,6 +16,9 @@ enum class SortOption {
     STARS, FORKS, UPDATED, CREATED, NAME
 }
 
+/**
+ * Filter options for repository queries
+ */
 data class FilterOptions(
     val language: String? = null,
     val minStars: Int? = null,
@@ -28,6 +31,13 @@ data class FilterOptions(
     val tagIds: List<Int> = emptyList()
 )
 
+/**
+ * Repository for managing local organization features:
+ * - Tags/Collections for categorizing repositories
+ * - Favorites and Pinned repositories
+ * - Saved search presets
+ * - Advanced sorting and filtering
+ */
 @Singleton
 class OrganizationRepository @Inject constructor(
     private val repositoryDao: RepositoryDao,
@@ -61,6 +71,11 @@ class OrganizationRepository @Inject constructor(
 
     fun getRepositoriesWithTag(tagId: Int): Flow<List<RepositoryEntity>> {
         return repositoryTagDao.getRepositoriesWithTag(tagId)
+    }
+
+    // Repository queries
+    suspend fun getRepositoryById(id: Int): RepositoryEntity? {
+        return repositoryDao.getRepositoryById(id)
     }
 
     // Favorites and Pinned

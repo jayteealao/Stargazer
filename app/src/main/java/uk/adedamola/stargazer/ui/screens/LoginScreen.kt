@@ -35,20 +35,45 @@ class LoginViewModel @Inject constructor(
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     fun onTokenChange(token: String) {
-        _uiState.value = _uiState.value.copy(token = token, error = null)
+        _uiState.value = _uiState.value.copy(token = token.trim(), error = null)
+    }
+
+    private fun isValidGitHubToken(token: String): Boolean {
+        // GitHub tokens follow specific formats:
+        // - Classic tokens: ghp_... (40 chars total)
+        // - Fine-grained PATs: github_pat_...
+        // - OAuth tokens: gho_...
+        // - Minimum length should be reasonable
+        return token.length >= 40 && (
+            token.startsWith("ghp_") ||
+            token.startsWith("github_pat_") ||
+            token.startsWith("gho_") ||
+            token.startsWith("ghs_") ||
+            token.startsWith("ghu_")
+        )
     }
 
     fun login(onSuccess: () -> Unit) {
-        if (_uiState.value.token.isBlank()) {
-            _uiState.value = _uiState.value.copy(error = "Token cannot be empty")
-            return
+        val token = _uiState.value.token.trim()
+
+        when {
+            token.isBlank() -> {
+                _uiState.value = _uiState.value.copy(error = "Token cannot be empty")
+                return
+            }
+            !isValidGitHubToken(token) -> {
+                _uiState.value = _uiState.value.copy(
+                    error = "Invalid GitHub token format. Token should start with ghp_, github_pat_, gho_, ghs_, or ghu_"
+                )
+                return
+            }
         }
 
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
         viewModelScope.launch {
             try {
-                tokenManager.saveToken(_uiState.value.token)
+                tokenManager.saveToken(token)
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 onSuccess()
             } catch (e: Exception) {
