@@ -3,6 +3,8 @@ package uk.adedamola.stargazer.ui.theme
 import androidx.compose.ui.graphics.Color
 
 val FactoryOrange = Color(0xFFFF6600)
+val FactoryCyan = Color(0xFF00CCFF)
+val FactoryYellow = Color(0xFFFFCC00)
 val FactoryDarkGrey = Color(0xFF1A1A1A)
 val FactorySurfaceGrey = Color(0xFF2D2D2D)
 val FactoryTextWhite = Color(0xFFF0F0F0)
