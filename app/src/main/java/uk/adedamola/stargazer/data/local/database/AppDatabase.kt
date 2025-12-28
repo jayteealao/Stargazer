@@ -19,7 +19,12 @@ package uk.adedamola.stargazer.data.local.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 
-@Database(entities = [Stargazer::class], version = 1)
+@Database(
+    entities = [Stargazer::class, RepositoryEntity::class],
+    version = 2,
+    exportSchema = true
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun stargazerDao(): StargazerDao
+    abstract fun repositoryDao(): RepositoryDao
 }
