@@ -20,11 +20,20 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [Stargazer::class, RepositoryEntity::class],
-    version = 2,
+    entities = [
+        Stargazer::class,
+        RepositoryEntity::class,
+        Tag::class,
+        RepositoryTag::class,
+        SearchPreset::class
+    ],
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun stargazerDao(): StargazerDao
     abstract fun repositoryDao(): RepositoryDao
+    abstract fun tagDao(): TagDao
+    abstract fun repositoryTagDao(): RepositoryTagDao
+    abstract fun searchPresetDao(): SearchPresetDao
 }
