@@ -142,9 +142,7 @@ fun RepoCard(
                                 containerColor = Color(android.graphics.Color.parseColor(tag.color)).copy(alpha = 0.3f),
                                 labelColor = Color(android.graphics.Color.parseColor(tag.color))
                             ),
-                            border = AssistChipDefaults.assistChipBorder(
-                                borderColor = Color(android.graphics.Color.parseColor(tag.color))
-                            )
+                            border = BorderStroke(1.dp, Color(android.graphics.Color.parseColor(tag.color)))
                         )
                     }
                     // Add tag button
@@ -160,9 +158,7 @@ fun RepoCard(
                             containerColor = Color.Transparent,
                             labelColor = Color.White.copy(alpha = 0.6f)
                         ),
-                        border = AssistChipDefaults.assistChipBorder(
-                            borderColor = FactoryBorder
-                        )
+                        border = BorderStroke(1.dp, FactoryBorder)
                     )
                 }
             } else {
@@ -179,9 +175,7 @@ fun RepoCard(
                         containerColor = Color.Transparent,
                         labelColor = Color.White.copy(alpha = 0.6f)
                     ),
-                    border = AssistChipDefaults.assistChipBorder(
-                        borderColor = FactoryBorder
-                    )
+                    border = BorderStroke(1.dp, FactoryBorder)
                 )
             }
 
