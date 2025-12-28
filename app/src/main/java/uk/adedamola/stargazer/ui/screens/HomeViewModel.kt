@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
@@ -60,32 +62,24 @@ class HomeViewModel @Inject constructor(
     private val _selectedTagId = MutableStateFlow<Int?>(null)
     val selectedTagId: StateFlow<Int?> = _selectedTagId.asStateFlow()
 
-    // All available tags
-    val allTags: StateFlow<List<Tag>> = MutableStateFlow(emptyList())
+    // All available tags - automatically managed lifecycle with stateIn()
+    val allTags: StateFlow<List<Tag>> = organizationRepository.getAllTags()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
-    // All saved presets
-    val savedPresets: StateFlow<List<SearchPreset>> = MutableStateFlow(emptyList())
+    // All saved presets - automatically managed lifecycle with stateIn()
+    val savedPresets: StateFlow<List<SearchPreset>> = organizationRepository.getAllPresets()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     init {
         loadRepositories()
-        observeTags()
-        observePresets()
-    }
-
-    private fun observeTags() {
-        viewModelScope.launch {
-            organizationRepository.getAllTags().collect { tags ->
-                (allTags as MutableStateFlow).value = tags
-            }
-        }
-    }
-
-    private fun observePresets() {
-        viewModelScope.launch {
-            organizationRepository.getAllPresets().collect { presets ->
-                (savedPresets as MutableStateFlow).value = presets
-            }
-        }
     }
 
     fun loadRepositories(forceRefresh: Boolean = false) {
@@ -154,13 +148,14 @@ class HomeViewModel @Inject constructor(
     private suspend fun loadRepositoryStates(repositories: List<GitHubRepository>) {
         val states = mutableMapOf<Int, RepositoryState>()
         repositories.forEach { repo ->
-            var tags: List<Tag> = emptyList()
-            organizationRepository.getTagsForRepository(repo.id).collect { repoTags ->
-                tags = repoTags
-            }
-            // Note: We don't have direct access to favorites/pinned from domain model
-            // Would need to query database or add to domain model
-            states[repo.id] = RepositoryState(tags = tags)
+            // Use first() to get current value instead of infinite collect()
+            val tags = organizationRepository.getTagsForRepository(repo.id).first()
+            val entity = organizationRepository.getRepositoryById(repo.id)
+            states[repo.id] = RepositoryState(
+                tags = tags,
+                isFavorite = entity?.isFavorite ?: false,
+                isPinned = entity?.isPinned ?: false
+            )
         }
         _uiState.value = HomeUiState.Success(repositories, states)
     }

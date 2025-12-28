@@ -84,7 +84,7 @@ android {
     buildFeatures {
         compose = true
         aidl = false
-        buildConfig = false
+        buildConfig = true  // Enable for BuildConfig.DEBUG access
         renderScript = false
         shaders = false
     }

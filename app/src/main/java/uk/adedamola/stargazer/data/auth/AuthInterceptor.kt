@@ -5,15 +5,24 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 import javax.inject.Inject
+import javax.inject.Singleton
 
+/**
+ * Interceptor that adds GitHub authentication headers to all requests.
+ * Caches the token to minimize DataStore access on the critical path.
+ */
+@Singleton
 class AuthInterceptor @Inject constructor(
     private val tokenManager: TokenManager
 ) : Interceptor {
 
+    @Volatile
+    private var cachedToken: String? = null
+    private val lock = Any()
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        val token = runBlocking {
-            tokenManager.token.first()
-        }
+        // Get token from cache or fetch it
+        val token = getToken()
 
         val request = if (token != null) {
             chain.request().newBuilder()
@@ -27,5 +36,31 @@ class AuthInterceptor @Inject constructor(
         }
 
         return chain.proceed(request)
+    }
+
+    private fun getToken(): String? {
+        // Return cached token if available
+        cachedToken?.let { return it }
+
+        // Otherwise fetch and cache it
+        synchronized(lock) {
+            // Double-check after acquiring lock
+            cachedToken?.let { return it }
+
+            val token = runBlocking {
+                tokenManager.token.first()
+            }
+            cachedToken = token
+            return token
+        }
+    }
+
+    /**
+     * Call this to invalidate the cached token (e.g., after logout)
+     */
+    fun clearCache() {
+        synchronized(lock) {
+            cachedToken = null
+        }
     }
 }
