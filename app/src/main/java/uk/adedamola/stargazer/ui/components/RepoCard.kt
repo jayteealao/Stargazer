@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -73,7 +73,7 @@ fun RepoCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Divider(color = FactoryBorder, thickness = 1.dp)
+            HorizontalDivider(color = FactoryBorder, thickness = 1.dp)
 
             Spacer(modifier = Modifier.height(8.dp))
 

@@ -65,7 +65,9 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("release")
+            if (System.getenv("SIGNING_STORE_FILE") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
