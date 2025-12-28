@@ -16,7 +16,7 @@
 
 package uk.adedamola.stargazer.ui.stargazer
 
-import uk.adedamola.stargazer.ui.theme.MyApplicationTheme
+import uk.adedamola.stargazer.ui.theme.StargazerTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,7 +81,7 @@ internal fun StargazerScreen(
 @Preview(showBackground = true)
 @Composable
 private fun DefaultPreview() {
-    MyApplicationTheme {
+    StargazerTheme {
         StargazerScreen(listOf("Compose", "Room", "Kotlin"), onSave = {})
     }
 }
@@ -89,7 +89,7 @@ private fun DefaultPreview() {
 @Preview(showBackground = true, widthDp = 480)
 @Composable
 private fun PortraitPreview() {
-    MyApplicationTheme {
+    StargazerTheme {
         StargazerScreen(listOf("Compose", "Room", "Kotlin"), onSave = {})
     }
 }
