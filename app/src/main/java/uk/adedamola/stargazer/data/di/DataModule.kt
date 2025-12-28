@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import uk.adedamola.stargazer.data.StargazerRepository
 import uk.adedamola.stargazer.data.DefaultStargazerRepository
+import uk.adedamola.stargazer.data.repository.GitHubRepository
+import uk.adedamola.stargazer.data.repository.GitHubRepositoryImpl
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +38,12 @@ interface DataModule {
     fun bindsStargazerRepository(
         stargazerRepository: DefaultStargazerRepository
     ): StargazerRepository
+
+    @Singleton
+    @Binds
+    fun bindsGitHubRepository(
+        gitHubRepository: GitHubRepositoryImpl
+    ): GitHubRepository
 }
 
 class FakeStargazerRepository @Inject constructor() : StargazerRepository {

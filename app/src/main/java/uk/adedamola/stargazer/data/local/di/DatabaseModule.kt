@@ -24,6 +24,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import uk.adedamola.stargazer.data.local.database.AppDatabase
+import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.local.database.StargazerDao
 import javax.inject.Singleton
 
@@ -37,12 +38,18 @@ class DatabaseModule {
     }
 
     @Provides
+    fun provideRepositoryDao(appDatabase: AppDatabase): RepositoryDao {
+        return appDatabase.repositoryDao()
+    }
+
+    @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext appContext: Context): AppDatabase {
         return Room.databaseBuilder(
             appContext,
             AppDatabase::class.java,
             "Stargazer"
-        ).build()
+        ).fallbackToDestructiveMigration()
+            .build()
     }
 }

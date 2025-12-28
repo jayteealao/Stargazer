@@ -19,6 +19,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt.gradle)
     alias(libs.plugins.ksp)
     alias(libs.plugins.compose.compiler)
@@ -126,6 +127,18 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.datastore.preferences)
+
+    // Networking
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.kotlinx.serialization.json)
+
+    // Image loading
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network)
 
     // Compose
     implementation(libs.androidx.compose.ui)
