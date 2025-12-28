@@ -1,6 +1,5 @@
 package uk.adedamola.stargazer.data.di
 
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -10,6 +9,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import uk.adedamola.stargazer.data.auth.AuthInterceptor
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import java.util.concurrent.TimeUnit
