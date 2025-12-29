@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.ui.components.CreateTagDialog
 import uk.adedamola.stargazer.ui.components.FilterDrawerContent
 import uk.adedamola.stargazer.ui.components.RepoCard
+import uk.adedamola.stargazer.ui.components.SearchBar
 import uk.adedamola.stargazer.ui.components.TagAssignmentSheet
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
@@ -57,6 +58,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val repositories = viewModel.repositories.collectAsLazyPagingItems()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val sortOption by viewModel.sortOption.collectAsState()
     val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
     val showPinnedOnly by viewModel.showPinnedOnly.collectAsState()
@@ -138,18 +140,27 @@ fun HomeScreen(
                 )
             }
         ) { innerPadding ->
-            // Repository List
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = {
-                    isRefreshing = true
-                    repositories.refresh()
-                    viewModel.refresh()
-                },
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
+                // Search Bar
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = viewModel::onSearchQueryChange
+                )
+
+                // Repository List
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        repositories.refresh()
+                        viewModel.refresh()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                ) {
                 val loadState = repositories.loadState
 
                 // Handle refresh state
@@ -304,6 +315,7 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }

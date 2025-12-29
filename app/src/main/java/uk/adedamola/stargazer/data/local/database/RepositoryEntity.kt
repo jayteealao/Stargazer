@@ -47,7 +47,16 @@ interface RepositoryDao {
     @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
     fun getAllRepositoriesPaging(): PagingSource<Int, RepositoryEntity>
 
-    @Query("SELECT * FROM repositories WHERE name LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY stargazersCount DESC")
+    @Query("""
+        SELECT * FROM repositories
+        WHERE name LIKE '%' || :query || '%'
+           OR description LIKE '%' || :query || '%'
+           OR fullName LIKE '%' || :query || '%'
+           OR ownerLogin LIKE '%' || :query || '%'
+           OR language LIKE '%' || :query || '%'
+           OR topics LIKE '%' || :query || '%'
+        ORDER BY stargazersCount DESC
+    """)
     fun searchRepositoriesPaging(query: String): PagingSource<Int, RepositoryEntity>
 
     @Query("SELECT * FROM repositories WHERE language = :language ORDER BY stargazersCount DESC")
@@ -60,7 +69,16 @@ interface RepositoryDao {
     @Query("SELECT * FROM repositories WHERE id = :id")
     suspend fun getRepositoryById(id: Int): RepositoryEntity?
 
-    @Query("SELECT * FROM repositories WHERE name LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%'")
+    @Query("""
+        SELECT * FROM repositories
+        WHERE name LIKE '%' || :query || '%'
+           OR description LIKE '%' || :query || '%'
+           OR fullName LIKE '%' || :query || '%'
+           OR ownerLogin LIKE '%' || :query || '%'
+           OR language LIKE '%' || :query || '%'
+           OR topics LIKE '%' || :query || '%'
+        ORDER BY stargazersCount DESC
+    """)
     fun searchRepositories(query: String): Flow<List<RepositoryEntity>>
 
     @Query("SELECT * FROM repositories WHERE language = :language ORDER BY stargazersCount DESC")
