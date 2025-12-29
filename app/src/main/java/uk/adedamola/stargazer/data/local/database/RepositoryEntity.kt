@@ -7,6 +7,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "repositories")
@@ -64,9 +66,110 @@ interface RepositoryDao {
     @Query("SELECT * FROM repositories WHERE language = :language ORDER BY stargazersCount DESC")
     fun getRepositoriesByLanguage(language: String): Flow<List<RepositoryEntity>>
 
+    /**
+     * Upserts repositories from API while preserving local user data.
+     * Uses custom SQL to update only API fields, keeping isFavorite and isPinned intact.
+     */
+    @Transaction
+    suspend fun upsertRepositories(repositories: List<RepositoryEntity>) {
+        repositories.forEach { repo ->
+            val existing = getRepositoryById(repo.id)
+            if (existing != null) {
+                // Update only API fields, preserve local fields
+                updateRepositoryFromApi(
+                    id = repo.id,
+                    name = repo.name,
+                    fullName = repo.fullName,
+                    ownerLogin = repo.ownerLogin,
+                    ownerAvatarUrl = repo.ownerAvatarUrl,
+                    htmlUrl = repo.htmlUrl,
+                    description = repo.description,
+                    fork = repo.fork,
+                    createdAt = repo.createdAt,
+                    updatedAt = repo.updatedAt,
+                    pushedAt = repo.pushedAt,
+                    homepage = repo.homepage,
+                    size = repo.size,
+                    stargazersCount = repo.stargazersCount,
+                    watchersCount = repo.watchersCount,
+                    language = repo.language,
+                    forksCount = repo.forksCount,
+                    openIssuesCount = repo.openIssuesCount,
+                    defaultBranch = repo.defaultBranch,
+                    topics = repo.topics,
+                    visibility = repo.visibility,
+                    licenseName = repo.licenseName,
+                    cachedAt = repo.cachedAt
+                    // isFavorite and isPinned are NOT updated - they're preserved!
+                )
+            } else {
+                // New repo - insert with defaults
+                insertRepositoryInternal(repo)
+            }
+        }
+    }
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertRepositoryInternal(repository: RepositoryEntity)
+
+    @Query("""
+        UPDATE repositories SET
+            name = :name,
+            fullName = :fullName,
+            ownerLogin = :ownerLogin,
+            ownerAvatarUrl = :ownerAvatarUrl,
+            htmlUrl = :htmlUrl,
+            description = :description,
+            fork = :fork,
+            createdAt = :createdAt,
+            updatedAt = :updatedAt,
+            pushedAt = :pushedAt,
+            homepage = :homepage,
+            size = :size,
+            stargazersCount = :stargazersCount,
+            watchersCount = :watchersCount,
+            language = :language,
+            forksCount = :forksCount,
+            openIssuesCount = :openIssuesCount,
+            defaultBranch = :defaultBranch,
+            topics = :topics,
+            visibility = :visibility,
+            licenseName = :licenseName,
+            cachedAt = :cachedAt
+        WHERE id = :id
+    """)
+    suspend fun updateRepositoryFromApi(
+        id: Int,
+        name: String,
+        fullName: String,
+        ownerLogin: String,
+        ownerAvatarUrl: String,
+        htmlUrl: String,
+        description: String?,
+        fork: Boolean,
+        createdAt: String,
+        updatedAt: String,
+        pushedAt: String?,
+        homepage: String?,
+        size: Int,
+        stargazersCount: Int,
+        watchersCount: Int,
+        language: String?,
+        forksCount: Int,
+        openIssuesCount: Int,
+        defaultBranch: String,
+        topics: String,
+        visibility: String,
+        licenseName: String?,
+        cachedAt: Long
+    )
+
+    // Keep old methods for compatibility but mark as deprecated
+    @Deprecated("Use upsertRepositories instead to preserve local user data")
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRepository(repository: RepositoryEntity)
 
+    @Deprecated("Use upsertRepositories instead to preserve local user data")
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRepositories(repositories: List<RepositoryEntity>)
 
