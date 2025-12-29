@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.data.local.database
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -54,6 +55,9 @@ interface RepositoryTagDao {
 
     @Query("SELECT * FROM repositories WHERE id IN (SELECT repositoryId FROM repository_tags WHERE tagId = :tagId)")
     fun getRepositoriesWithTag(tagId: Int): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT * FROM repositories WHERE id IN (SELECT repositoryId FROM repository_tags WHERE tagId = :tagId) ORDER BY stargazersCount DESC")
+    fun getRepositoriesWithTagPaging(tagId: Int): PagingSource<Int, RepositoryEntity>
 
     @Query("DELETE FROM repository_tags WHERE repositoryId = :repositoryId")
     suspend fun deleteAllTagsForRepository(repositoryId: Int)

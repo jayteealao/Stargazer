@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.data.repository
 
+import androidx.paging.PagingData
 import kotlinx.coroutines.flow.Flow
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository as GitHubRepoModel
 
@@ -9,22 +10,15 @@ sealed class Result<out T> {
     object Loading : Result<Nothing>()
 }
 
-/**
- * Cache policy for data fetching operations.
- */
-enum class CachePolicy {
-    /** Use cached data if fresh, background refresh if stale, network only if empty */
-    CACHE_FIRST,
-    /** Always fetch from network, use cache as fallback on error */
-    NETWORK_FIRST,
-    /** Force network fetch, show loading state */
-    FORCE_REFRESH
-}
-
 interface GitHubRepository {
-    fun getStarredRepositories(cachePolicy: CachePolicy = CachePolicy.CACHE_FIRST): Flow<Result<List<GitHubRepoModel>>>
-    fun searchRepositories(query: String): Flow<Result<List<GitHubRepoModel>>>
-    fun getRepositoriesByLanguage(language: String): Flow<Result<List<GitHubRepoModel>>>
+    // Paging methods - return PagingData for UI consumption
+    fun getStarredRepositoriesPaging(): Flow<PagingData<GitHubRepoModel>>
+    fun searchRepositoriesPaging(query: String): Flow<PagingData<GitHubRepoModel>>
+    fun getRepositoriesByLanguagePaging(language: String): Flow<PagingData<GitHubRepoModel>>
+
+    // Non-paging methods for single items
     suspend fun getRepositoryByFullName(fullName: String): Result<GitHubRepoModel?>
+
+    // Trigger manual refresh
     suspend fun refreshStarredRepositories(): Result<Unit>
 }

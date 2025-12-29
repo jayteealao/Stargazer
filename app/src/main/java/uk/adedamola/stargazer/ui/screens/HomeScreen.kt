@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,8 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -18,8 +17,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -29,6 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import uk.adedamola.stargazer.ui.components.CreateTagDialog
 import uk.adedamola.stargazer.ui.components.FilterBar
 import uk.adedamola.stargazer.ui.components.RepoCard
@@ -42,12 +46,15 @@ fun HomeScreen(
     onRepoClick: (String) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val repositories = viewModel.repositories.collectAsLazyPagingItems()
     val sortOption by viewModel.sortOption.collectAsState()
     val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
     val showPinnedOnly by viewModel.showPinnedOnly.collectAsState()
     val selectedTagId by viewModel.selectedTagId.collectAsState()
     val allTags by viewModel.allTags.collectAsState()
+
+    // Track repository states locally (favorite, pinned, tags)
+    val repositoryStates = remember { mutableStateMapOf<Int, RepositoryState>() }
 
     var isRefreshing by remember { mutableStateOf(false) }
     var showCreateTagDialog by remember { mutableStateOf(false) }
@@ -102,12 +109,25 @@ fun HomeScreen(
                 isRefreshing = isRefreshing,
                 onRefresh = {
                     isRefreshing = true
+                    repositories.refresh()
                     viewModel.refresh()
                 },
                 modifier = Modifier.fillMaxSize()
             ) {
-                when (val state = uiState) {
-                    is HomeUiState.Loading -> {
+                val loadState = repositories.loadState
+
+                // Handle refresh state
+                LaunchedEffect(loadState.refresh) {
+                    when (loadState.refresh) {
+                        is LoadState.Loading -> isRefreshing = true
+                        is LoadState.NotLoading -> isRefreshing = false
+                        is LoadState.Error -> isRefreshing = false
+                    }
+                }
+
+                when {
+                    // Initial loading
+                    loadState.refresh is LoadState.Loading && repositories.itemCount == 0 -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -122,29 +142,66 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        isRefreshing = false
                     }
 
-                    is HomeUiState.Success -> {
-                        isRefreshing = false
-                        if (state.repositories.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
+                    // Error during initial load
+                    loadState.refresh is LoadState.Error && repositories.itemCount == 0 -> {
+                        val error = (loadState.refresh as LoadState.Error).error
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "NO_REPOSITORIES_FOUND",
+                                    text = "ERROR: ${error.message}",
                                     fontFamily = FontFamily.Monospace,
-                                    color = Color.White.copy(alpha = 0.6f)
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                                Text(
+                                    text = "PULL_TO_RETRY",
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                items(state.repositories) { repo ->
-                                    val repoState = state.repositoryStates[repo.id]
+                        }
+                    }
+
+                    // Empty state
+                    loadState.refresh is LoadState.NotLoading && repositories.itemCount == 0 -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "NO_REPOSITORIES_FOUND",
+                                fontFamily = FontFamily.Monospace,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+
+                    // Success state with data
+                    else -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(
+                                count = repositories.itemCount,
+                                key = repositories.itemKey { it.id }
+                            ) { index ->
+                                val repo = repositories[index]
+                                if (repo != null) {
+                                    // Load repository state if not cached
+                                    LaunchedEffect(repo.id) {
+                                        if (!repositoryStates.containsKey(repo.id)) {
+                                            repositoryStates[repo.id] = viewModel.getRepositoryState(repo.id)
+                                        }
+                                    }
+
+                                    val repoState = repositoryStates[repo.id]
                                     RepoCard(
                                         repoName = repo.name,
                                         repoDescription = repo.description ?: "No description available",
@@ -159,11 +216,19 @@ fun HomeScreen(
                                                 repo.id,
                                                 repoState?.isFavorite ?: false
                                             )
+                                            // Update local state immediately for UI responsiveness
+                                            repositoryStates[repo.id] = (repoState ?: RepositoryState()).copy(
+                                                isFavorite = !(repoState?.isFavorite ?: false)
+                                            )
                                         },
                                         onPinClick = {
                                             viewModel.togglePinned(
                                                 repo.id,
                                                 repoState?.isPinned ?: false
+                                            )
+                                            // Update local state immediately for UI responsiveness
+                                            repositoryStates[repo.id] = (repoState ?: RepositoryState()).copy(
+                                                isPinned = !(repoState?.isPinned ?: false)
                                             )
                                         },
                                         onTagsClick = {
@@ -174,28 +239,32 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                        }
-                    }
 
-                    is HomeUiState.Error -> {
-                        isRefreshing = false
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "ERROR: ${state.message}",
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                                Text(
-                                    text = "PULL_TO_RETRY",
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                            // Show loading indicator at the bottom while loading more
+                            if (loadState.append is LoadState.Loading) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(color = FactoryOrange)
+                                    }
+                                }
+                            }
+
+                            // Show error at the bottom if append fails
+                            if (loadState.append is LoadState.Error) {
+                                item {
+                                    val error = (loadState.append as LoadState.Error).error
+                                    Text(
+                                        text = "ERROR_LOADING_MORE: ${error.message}",
+                                        fontFamily = FontFamily.Monospace,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.padding(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -216,7 +285,7 @@ fun HomeScreen(
 
     if (showTagAssignmentSheet && selectedRepositoryForTags != null) {
         val (repoId, repoName) = selectedRepositoryForTags!!
-        val currentState = (uiState as? HomeUiState.Success)?.repositoryStates?.get(repoId)
+        val currentState = repositoryStates[repoId]
 
         TagAssignmentSheet(
             repositoryName = repoName,
@@ -230,6 +299,13 @@ fun HomeScreen(
                 } else {
                     viewModel.addTagToRepository(repoId, tag.id)
                 }
+                // Update local state immediately
+                val updatedTags = if (isAssigned) {
+                    currentState?.tags?.filter { it.id != tag.id } ?: emptyList()
+                } else {
+                    (currentState?.tags ?: emptyList()) + tag
+                }
+                repositoryStates[repoId] = (currentState ?: RepositoryState()).copy(tags = updatedTags)
             },
             onCreateNew = {
                 showTagAssignmentSheet = false
