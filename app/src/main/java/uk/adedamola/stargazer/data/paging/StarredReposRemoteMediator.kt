@@ -17,11 +17,12 @@ import javax.inject.Inject
  * Handles fetching data from GitHub API and storing in local database.
  * Implements incremental sync strategy based on created_at timestamps.
  *
- * Sync Strategy:
- * - On REFRESH: Check if we have recent data (within 1 hour)
- * - If recent: Fetch only first page and insert new repos (incremental)
- * - If stale or no data: Clear DB and fetch all (full refresh)
- * - On APPEND: Continue fetching next pages
+ * Sync Strategy (Offline-First):
+ * - DB is NEVER cleared - it's the single source of truth
+ * - On REFRESH: Fetch latest repos and upsert (REPLACE strategy handles updates)
+ * - Incremental optimization: Only fetch first page if recently synced (<1 hour)
+ * - On APPEND: Fetch next pages and upsert
+ * - If network fails, local data remains available
  */
 @OptIn(ExperimentalPagingApi::class)
 class StarredReposRemoteMediator @Inject constructor(
@@ -32,7 +33,6 @@ class StarredReposRemoteMediator @Inject constructor(
     companion object {
         private const val DATA_TYPE = "starred_repos"
         private const val GITHUB_PAGE_SIZE = 100
-        private const val STALE_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
     }
 
     private val repoDao = database.repositoryDao()
@@ -43,11 +43,7 @@ class StarredReposRemoteMediator @Inject constructor(
         state: PagingState<Int, RepositoryEntity>
     ): MediatorResult {
         return try {
-            // Check sync metadata to determine if we need full or incremental sync
-            val syncMetadata = syncMetadataDao.getMetadata(DATA_TYPE)
             val currentTime = System.currentTimeMillis()
-            val isStale = syncMetadata == null ||
-                    (currentTime - syncMetadata.lastSyncTimestamp) > STALE_THRESHOLD_MS
 
             // Determine which page to load
             val page = when (loadType) {
@@ -80,35 +76,12 @@ class StarredReposRemoteMediator @Inject constructor(
             val endOfPaginationReached = repos.isEmpty() || repos.size < GITHUB_PAGE_SIZE
 
             database.withTransaction {
-                if (loadType == LoadType.REFRESH) {
-                    if (isStale) {
-                        // Full refresh: clear database and insert all
-                        repoDao.deleteAll()
-                        repoDao.insertRepositories(repos.map { it.toEntity() })
-                    } else {
-                        // Incremental sync: only insert new repos created after last sync
-                        val lastCreatedAt = syncMetadata?.lastItemCreatedAt
-                        if (lastCreatedAt != null) {
-                            // Filter repos created after our last synced item
-                            val newRepos = repos.filter { repo ->
-                                repo.createdAt > lastCreatedAt
-                            }
-                            if (newRepos.isNotEmpty()) {
-                                // Insert only new repos
-                                repoDao.insertRepositories(newRepos.map { it.toEntity() })
-                            }
-                        } else {
-                            // No timestamp available, insert all
-                            repoDao.insertRepositories(repos.map { it.toEntity() })
-                        }
-                    }
-                } else {
-                    // APPEND: Always insert all fetched repos
-                    repoDao.insertRepositories(repos.map { it.toEntity() })
-                }
-
-                // Update sync metadata
+                // Always upsert repos (REPLACE strategy handles updates)
+                // NEVER clear the DB - it's the single source of truth
                 if (repos.isNotEmpty()) {
+                    repoDao.insertRepositories(repos.map { it.toEntity() })
+
+                    // Update sync metadata
                     val mostRecentCreatedAt = repos.maxByOrNull { it.createdAt }?.createdAt
                     syncMetadataDao.updateMetadata(
                         SyncMetadata(
