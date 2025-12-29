@@ -19,9 +19,9 @@ import javax.inject.Inject
  *
  * Sync Strategy (Offline-First):
  * - DB is NEVER cleared - it's the single source of truth
- * - On REFRESH: Fetch latest repos and upsert (REPLACE strategy handles updates)
- * - Incremental optimization: Only fetch first page if recently synced (<1 hour)
+ * - On REFRESH: Fetch latest repos and upsert (preserves isFavorite, isPinned)
  * - On APPEND: Fetch next pages and upsert
+ * - Local user data (favorites, pins, tags) is always preserved
  * - If network fails, local data remains available
  */
 @OptIn(ExperimentalPagingApi::class)
@@ -76,10 +76,10 @@ class StarredReposRemoteMediator @Inject constructor(
             val endOfPaginationReached = repos.isEmpty() || repos.size < GITHUB_PAGE_SIZE
 
             database.withTransaction {
-                // Always upsert repos (REPLACE strategy handles updates)
+                // Always upsert repos - updates API fields, preserves local user data
                 // NEVER clear the DB - it's the single source of truth
                 if (repos.isNotEmpty()) {
-                    repoDao.insertRepositories(repos.map { it.toEntity() })
+                    repoDao.upsertRepositories(repos.map { it.toEntity() })
 
                     // Update sync metadata
                     val mostRecentCreatedAt = repos.maxByOrNull { it.createdAt }?.createdAt
