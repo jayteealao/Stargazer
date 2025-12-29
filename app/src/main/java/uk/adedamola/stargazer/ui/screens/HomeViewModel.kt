@@ -1,18 +1,22 @@
 package uk.adedamola.stargazer.ui.screens
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.local.database.SearchPreset
@@ -38,14 +42,34 @@ private data class FilterState(
     val tagId: Int?
 )
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    private val savedStateHandle: SavedStateHandle,
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository
 ) : ViewModel() {
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    companion object {
+        private const val SEARCH_QUERY_KEY = "search_query"
+        private const val SEARCH_DEBOUNCE_MS = 300L
+    }
+
+    // Raw search query input (immediate updates for UI)
+    private val _rawSearchQuery = MutableStateFlow(
+        savedStateHandle.get<String>(SEARCH_QUERY_KEY) ?: ""
+    )
+    val searchQuery: StateFlow<String> = _rawSearchQuery.asStateFlow()
+
+    // Debounced and trimmed search query (used for actual search)
+    private val _debouncedSearchQuery: StateFlow<String> = _rawSearchQuery
+        .debounce(SEARCH_DEBOUNCE_MS)
+        .map { it.trim() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = savedStateHandle.get<String>(SEARCH_QUERY_KEY)?.trim() ?: ""
+        )
 
     private val _sortOption = MutableStateFlow(SortOption.STARS)
     val sortOption: StateFlow<SortOption> = _sortOption.asStateFlow()
@@ -81,9 +105,10 @@ class HomeViewModel @Inject constructor(
     /**
      * Main paged repository flow that switches based on active filters.
      * Uses flatMapLatest to switch between different paging sources when filters change.
+     * Uses debounced search query to avoid excessive database queries.
      */
     val repositories: Flow<PagingData<GitHubRepository>> = combine(
-        _searchQuery,
+        _debouncedSearchQuery,
         _sortOption,
         _selectedLanguage,
         _showFavoritesOnly,
@@ -131,7 +156,8 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
+        _rawSearchQuery.value = query
+        savedStateHandle[SEARCH_QUERY_KEY] = query
     }
 
     fun setSortOption(option: SortOption) {
@@ -206,7 +232,7 @@ class HomeViewModel @Inject constructor(
                 filterMaxStars = null,
                 filterFavoritesOnly = _showFavoritesOnly.value,
                 filterPinnedOnly = _showPinnedOnly.value,
-                searchQuery = _searchQuery.value.takeIf { it.isNotBlank() }
+                searchQuery = _rawSearchQuery.value.trim().takeIf { it.isNotBlank() }
             )
             organizationRepository.savePreset(preset)
         }
@@ -217,7 +243,9 @@ class HomeViewModel @Inject constructor(
         _selectedLanguage.value = preset.filterLanguage
         _showFavoritesOnly.value = preset.filterFavoritesOnly
         _showPinnedOnly.value = preset.filterPinnedOnly
-        _searchQuery.value = preset.searchQuery ?: ""
+        val query = preset.searchQuery ?: ""
+        _rawSearchQuery.value = query
+        savedStateHandle[SEARCH_QUERY_KEY] = query
     }
 
     fun deletePreset(preset: SearchPreset) {
@@ -227,7 +255,8 @@ class HomeViewModel @Inject constructor(
     }
 
     fun clearAllFilters() {
-        _searchQuery.value = ""
+        _rawSearchQuery.value = ""
+        savedStateHandle[SEARCH_QUERY_KEY] = ""
         _selectedLanguage.value = null
         _showFavoritesOnly.value = false
         _showPinnedOnly.value = false
