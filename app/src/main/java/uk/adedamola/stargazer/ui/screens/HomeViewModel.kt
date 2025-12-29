@@ -2,32 +2,26 @@ package uk.adedamola.stargazer.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
-import uk.adedamola.stargazer.data.mappers.toDomainModel
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
-import uk.adedamola.stargazer.data.repository.Result
 import uk.adedamola.stargazer.data.repository.SortOption
 import javax.inject.Inject
-
-sealed interface HomeUiState {
-    object Loading : HomeUiState
-    data class Success(
-        val repositories: List<GitHubRepository>,
-        val repositoryStates: Map<Int, RepositoryState> = emptyMap()
-    ) : HomeUiState
-    data class Error(val message: String) : HomeUiState
-}
 
 data class RepositoryState(
     val isFavorite: Boolean = false,
@@ -35,14 +29,20 @@ data class RepositoryState(
     val tags: List<Tag> = emptyList()
 )
 
+private data class FilterState(
+    val query: String,
+    val sortBy: SortOption,
+    val language: String?,
+    val favoritesOnly: Boolean,
+    val pinnedOnly: Boolean,
+    val tagId: Int?
+)
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository
 ) : ViewModel() {
-
-    private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -78,105 +78,60 @@ class HomeViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    init {
-        loadRepositories()
-    }
-
-    fun loadRepositories(forceRefresh: Boolean = false) {
-        viewModelScope.launch {
-            // Combine filters
-            val favoritesOnly = _showFavoritesOnly.value
-            val pinnedOnly = _showPinnedOnly.value
-            val language = _selectedLanguage.value
-            val tagId = _selectedTagId.value
-            val sortBy = _sortOption.value
-            val query = _searchQuery.value
-
-            when {
-                favoritesOnly -> {
-                    organizationRepository.getFavoriteRepositories().collect { repos ->
-                        loadRepositoryStates(repos.map { it.toDomainModel() })
-                    }
-                }
-                pinnedOnly -> {
-                    organizationRepository.getPinnedRepositories().collect { repos ->
-                        loadRepositoryStates(repos.map { it.toDomainModel() })
-                    }
-                }
-                tagId != null -> {
-                    organizationRepository.getRepositoriesWithTag(tagId).collect { repos ->
-                        loadRepositoryStates(repos.map { it.toDomainModel() })
-                    }
-                }
-                query.isNotBlank() -> {
-                    gitHubRepository.searchRepositories(query).collect { result ->
-                        when (result) {
-                            is Result.Success -> loadRepositoryStates(result.data)
-                            is Result.Error -> _uiState.value = HomeUiState.Error(
-                                result.exception.message ?: "Search failed"
-                            )
-                            else -> {}
-                        }
-                    }
-                }
-                language != null -> {
-                    gitHubRepository.getRepositoriesByLanguage(language).collect { result ->
-                        when (result) {
-                            is Result.Success -> loadRepositoryStates(result.data)
-                            is Result.Error -> _uiState.value = HomeUiState.Error(
-                                result.exception.message ?: "Filter failed"
-                            )
-                            else -> {}
-                        }
-                    }
-                }
-                else -> {
-                    gitHubRepository.getStarredRepositories(forceRefresh).collect { result ->
-                        when (result) {
-                            is Result.Loading -> _uiState.value = HomeUiState.Loading
-                            is Result.Success -> loadRepositoryStates(result.data)
-                            is Result.Error -> _uiState.value = HomeUiState.Error(
-                                result.exception.message ?: "Unknown error occurred"
-                            )
-                        }
-                    }
-                }
+    /**
+     * Main paged repository flow that switches based on active filters.
+     * Uses flatMapLatest to switch between different paging sources when filters change.
+     */
+    val repositories: Flow<PagingData<GitHubRepository>> = combine(
+        _searchQuery,
+        _sortOption,
+        _selectedLanguage,
+        _showFavoritesOnly,
+        _showPinnedOnly,
+        _selectedTagId
+    ) { query, sortBy, language, favoritesOnly, pinnedOnly, tagId ->
+        FilterState(query, sortBy, language, favoritesOnly, pinnedOnly, tagId)
+    }.flatMapLatest { filterState ->
+        when {
+            filterState.favoritesOnly -> {
+                organizationRepository.getFavoriteRepositoriesPaging()
+            }
+            filterState.pinnedOnly -> {
+                organizationRepository.getPinnedRepositoriesPaging()
+            }
+            filterState.tagId != null -> {
+                organizationRepository.getRepositoriesWithTagPaging(filterState.tagId)
+            }
+            filterState.query.isNotBlank() -> {
+                gitHubRepository.searchRepositoriesPaging(filterState.query)
+            }
+            filterState.language != null -> {
+                gitHubRepository.getRepositoriesByLanguagePaging(filterState.language)
+            }
+            else -> {
+                // Default: show all starred repos with selected sort option
+                organizationRepository.getRepositoriesPagingSorted(filterState.sortBy)
             }
         }
-    }
-
-    private suspend fun loadRepositoryStates(repositories: List<GitHubRepository>) {
-        val states = mutableMapOf<Int, RepositoryState>()
-        repositories.forEach { repo ->
-            // Use first() to get current value instead of infinite collect()
-            val tags = organizationRepository.getTagsForRepository(repo.id).first()
-            val entity = organizationRepository.getRepositoryById(repo.id)
-            states[repo.id] = RepositoryState(
-                tags = tags,
-                isFavorite = entity?.isFavorite ?: false,
-                isPinned = entity?.isPinned ?: false
-            )
-        }
-        _uiState.value = HomeUiState.Success(repositories, states)
-    }
+    }.cachedIn(viewModelScope)
 
     fun refresh() {
-        loadRepositories(forceRefresh = true)
+        // Trigger refresh by clearing and reloading the paging data
+        viewModelScope.launch {
+            gitHubRepository.refreshStarredRepositories()
+        }
     }
 
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
-        loadRepositories()
     }
 
     fun setSortOption(option: SortOption) {
         _sortOption.value = option
-        loadRepositories()
     }
 
     fun filterByLanguage(language: String?) {
         _selectedLanguage.value = language
-        loadRepositories()
     }
 
     fun toggleFavoritesFilter() {
@@ -184,7 +139,6 @@ class HomeViewModel @Inject constructor(
         if (_showFavoritesOnly.value) {
             _showPinnedOnly.value = false
         }
-        loadRepositories()
     }
 
     fun togglePinnedFilter() {
@@ -192,39 +146,33 @@ class HomeViewModel @Inject constructor(
         if (_showPinnedOnly.value) {
             _showFavoritesOnly.value = false
         }
-        loadRepositories()
     }
 
     fun filterByTag(tagId: Int?) {
         _selectedTagId.value = tagId
-        loadRepositories()
     }
 
     fun toggleFavorite(repositoryId: Int, currentState: Boolean) {
         viewModelScope.launch {
             organizationRepository.toggleFavorite(repositoryId, !currentState)
-            loadRepositories()
         }
     }
 
     fun togglePinned(repositoryId: Int, currentState: Boolean) {
         viewModelScope.launch {
             organizationRepository.togglePinned(repositoryId, !currentState)
-            loadRepositories()
         }
     }
 
     fun addTagToRepository(repositoryId: Int, tagId: Int) {
         viewModelScope.launch {
             organizationRepository.addTagToRepository(repositoryId, tagId)
-            loadRepositories()
         }
     }
 
     fun removeTagFromRepository(repositoryId: Int, tagId: Int) {
         viewModelScope.launch {
             organizationRepository.removeTagFromRepository(repositoryId, tagId)
-            loadRepositories()
         }
     }
 
@@ -262,7 +210,6 @@ class HomeViewModel @Inject constructor(
         _showFavoritesOnly.value = preset.filterFavoritesOnly
         _showPinnedOnly.value = preset.filterPinnedOnly
         _searchQuery.value = preset.searchQuery ?: ""
-        loadRepositories()
     }
 
     fun deletePreset(preset: SearchPreset) {
@@ -278,6 +225,22 @@ class HomeViewModel @Inject constructor(
         _showPinnedOnly.value = false
         _selectedTagId.value = null
         _sortOption.value = SortOption.STARS
-        loadRepositories()
+    }
+
+    /**
+     * Gets the current repository state (favorite, pinned, tags) for a specific repository.
+     * This is used by the UI to display the current state of each repository.
+     */
+    suspend fun getRepositoryState(repositoryId: Int): RepositoryState {
+        val entity = organizationRepository.getRepositoryById(repositoryId)
+        val tags = organizationRepository.getTagsForRepository(repositoryId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+            .value
+
+        return RepositoryState(
+            isFavorite = entity?.isFavorite ?: false,
+            isPinned = entity?.isPinned ?: false,
+            tags = tags
+        )
     }
 }
