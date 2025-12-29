@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.data.local.database
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Insert
@@ -40,6 +41,17 @@ data class RepositoryEntity(
 
 @Dao
 interface RepositoryDao {
+    // Paging queries for main list displays
+    @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
+    fun getAllRepositoriesPaging(): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories WHERE name LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY stargazersCount DESC")
+    fun searchRepositoriesPaging(query: String): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories WHERE language = :language ORDER BY stargazersCount DESC")
+    fun getRepositoriesByLanguagePaging(language: String): PagingSource<Int, RepositoryEntity>
+
+    // Non-paging queries for single items or counts
     @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
     fun getAllRepositories(): Flow<List<RepositoryEntity>>
 
@@ -71,13 +83,37 @@ interface RepositoryDao {
     @Query("UPDATE repositories SET isPinned = :isPinned WHERE id = :id")
     suspend fun updatePinned(id: Int, isPinned: Boolean)
 
+    // Paging queries for favorites and pinned
+    @Query("SELECT * FROM repositories WHERE isFavorite = 1 ORDER BY stargazersCount DESC")
+    fun getFavoriteRepositoriesPaging(): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories WHERE isPinned = 1 ORDER BY stargazersCount DESC")
+    fun getPinnedRepositoriesPaging(): PagingSource<Int, RepositoryEntity>
+
+    // Paging queries with different sort orders
+    @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
+    fun getRepositoriesByStarsPaging(): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories ORDER BY forksCount DESC")
+    fun getRepositoriesByForksPaging(): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories ORDER BY updatedAt DESC")
+    fun getRepositoriesByUpdatedPaging(): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories ORDER BY createdAt DESC")
+    fun getRepositoriesByCreatedPaging(): PagingSource<Int, RepositoryEntity>
+
+    @Query("SELECT * FROM repositories ORDER BY name ASC")
+    fun getRepositoriesByNamePaging(): PagingSource<Int, RepositoryEntity>
+
+    // Non-paging versions (for compatibility)
     @Query("SELECT * FROM repositories WHERE isFavorite = 1 ORDER BY stargazersCount DESC")
     fun getFavoriteRepositories(): Flow<List<RepositoryEntity>>
 
     @Query("SELECT * FROM repositories WHERE isPinned = 1 ORDER BY stargazersCount DESC")
     fun getPinnedRepositories(): Flow<List<RepositoryEntity>>
 
-    // Sorting options
+    // Sorting options (non-paging)
     @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
     fun getRepositoriesByStars(): Flow<List<RepositoryEntity>>
 

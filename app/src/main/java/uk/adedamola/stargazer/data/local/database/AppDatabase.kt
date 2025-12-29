@@ -25,9 +25,10 @@ import androidx.room.RoomDatabase
         RepositoryEntity::class,
         Tag::class,
         RepositoryTag::class,
-        SearchPreset::class
+        SearchPreset::class,
+        SyncMetadata::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,4 +37,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun repositoryTagDao(): RepositoryTagDao
     abstract fun searchPresetDao(): SearchPresetDao
+    abstract fun syncMetadataDao(): SyncMetadataDao
 }
