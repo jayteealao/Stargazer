@@ -12,7 +12,8 @@ sealed class Result<out T> {
 
 interface GitHubRepository {
     // Paging methods - return PagingData for UI consumption
-    fun getStarredRepositoriesPaging(): Flow<PagingData<GitHubRepoModel>>
+    // Uses RemoteMediator to sync from API on first load
+    fun getStarredRepositoriesPaging(sortBy: SortOption = SortOption.STARS): Flow<PagingData<GitHubRepoModel>>
     fun searchRepositoriesPaging(query: String): Flow<PagingData<GitHubRepoModel>>
     fun getRepositoriesByLanguagePaging(language: String): Flow<PagingData<GitHubRepoModel>>
 

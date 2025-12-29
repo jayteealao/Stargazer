@@ -37,12 +37,12 @@ class GitHubRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Returns a paged flow of starred repositories.
+     * Returns a paged flow of starred repositories with sorting.
      * Uses RemoteMediator to sync from GitHub API to local DB.
      * Room DB is the single source of truth.
      */
     @OptIn(ExperimentalPagingApi::class)
-    override fun getStarredRepositoriesPaging(): Flow<PagingData<GitHubRepoModel>> {
+    override fun getStarredRepositoriesPaging(sortBy: SortOption): Flow<PagingData<GitHubRepoModel>> {
         return Pager(
             config = PagingConfig(
                 pageSize = PAGE_SIZE,
@@ -54,7 +54,15 @@ class GitHubRepositoryImpl @Inject constructor(
                 apiService = apiService,
                 database = database
             ),
-            pagingSourceFactory = { repositoryDao.getAllRepositoriesPaging() }
+            pagingSourceFactory = {
+                when (sortBy) {
+                    SortOption.STARS -> repositoryDao.getRepositoriesByStarsPaging()
+                    SortOption.FORKS -> repositoryDao.getRepositoriesByForksPaging()
+                    SortOption.UPDATED -> repositoryDao.getRepositoriesByUpdatedPaging()
+                    SortOption.CREATED -> repositoryDao.getRepositoriesByCreatedPaging()
+                    SortOption.NAME -> repositoryDao.getRepositoriesByNamePaging()
+                }
+            }
         ).flow.map { pagingData ->
             // Map entities to domain models
             pagingData.map { it.toDomainModel() }

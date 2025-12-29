@@ -117,7 +117,8 @@ class HomeViewModel @Inject constructor(
             }
             else -> {
                 // Default: show all starred repos with selected sort option
-                organizationRepository.getRepositoriesPagingSorted(filterState.sortBy)
+                // Uses RemoteMediator to sync from API on first load
+                gitHubRepository.getStarredRepositoriesPaging(filterState.sortBy)
             }
         }
     }.cachedIn(viewModelScope)
