@@ -89,8 +89,15 @@ class HomeViewModel @Inject constructor(
         _showFavoritesOnly,
         _showPinnedOnly,
         _selectedTagId
-    ) { query, sortBy, language, favoritesOnly, pinnedOnly, tagId ->
-        FilterState(query, sortBy, language, favoritesOnly, pinnedOnly, tagId)
+    ) { flows: Array<Any?> ->
+        FilterState(
+            query = flows[0] as String,
+            sortBy = flows[1] as SortOption,
+            language = flows[2] as String?,
+            favoritesOnly = flows[3] as Boolean,
+            pinnedOnly = flows[4] as Boolean,
+            tagId = flows[5] as Int?
+        )
     }.flatMapLatest { filterState ->
         when {
             filterState.favoritesOnly -> {
