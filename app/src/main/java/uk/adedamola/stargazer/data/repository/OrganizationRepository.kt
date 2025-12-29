@@ -1,6 +1,11 @@
 package uk.adedamola.stargazer.data.repository
 
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.map
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.local.database.RepositoryEntity
 import uk.adedamola.stargazer.data.local.database.RepositoryTag
@@ -9,6 +14,8 @@ import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.SearchPresetDao
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.local.database.TagDao
+import uk.adedamola.stargazer.data.mappers.toDomainModel
+import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +53,63 @@ class OrganizationRepository @Inject constructor(
     private val searchPresetDao: SearchPresetDao
 ) {
 
+    companion object {
+        private const val PAGE_SIZE = 20
+        private const val PREFETCH_DISTANCE = 5
+        private const val INITIAL_LOAD_SIZE = 40
+    }
+
+    // Paging methods for displaying repository lists
+    fun getRepositoriesPagingSorted(sortBy: SortOption): Flow<PagingData<GitHubRepository>> {
+        return Pager(
+            config = PagingConfig(
+                pageSize = PAGE_SIZE,
+                prefetchDistance = PREFETCH_DISTANCE,
+                initialLoadSize = INITIAL_LOAD_SIZE,
+                enablePlaceholders = false
+            ),
+            pagingSourceFactory = {
+                when (sortBy) {
+                    SortOption.STARS -> repositoryDao.getRepositoriesByStarsPaging()
+                    SortOption.FORKS -> repositoryDao.getRepositoriesByForksPaging()
+                    SortOption.UPDATED -> repositoryDao.getRepositoriesByUpdatedPaging()
+                    SortOption.CREATED -> repositoryDao.getRepositoriesByCreatedPaging()
+                    SortOption.NAME -> repositoryDao.getRepositoriesByNamePaging()
+                }
+            }
+        ).flow.map { pagingData ->
+            pagingData.map { it.toDomainModel() }
+        }
+    }
+
+    fun getFavoriteRepositoriesPaging(): Flow<PagingData<GitHubRepository>> {
+        return Pager(
+            config = PagingConfig(
+                pageSize = PAGE_SIZE,
+                prefetchDistance = PREFETCH_DISTANCE,
+                initialLoadSize = INITIAL_LOAD_SIZE,
+                enablePlaceholders = false
+            ),
+            pagingSourceFactory = { repositoryDao.getFavoriteRepositoriesPaging() }
+        ).flow.map { pagingData ->
+            pagingData.map { it.toDomainModel() }
+        }
+    }
+
+    fun getPinnedRepositoriesPaging(): Flow<PagingData<GitHubRepository>> {
+        return Pager(
+            config = PagingConfig(
+                pageSize = PAGE_SIZE,
+                prefetchDistance = PREFETCH_DISTANCE,
+                initialLoadSize = INITIAL_LOAD_SIZE,
+                enablePlaceholders = false
+            ),
+            pagingSourceFactory = { repositoryDao.getPinnedRepositoriesPaging() }
+        ).flow.map { pagingData ->
+            pagingData.map { it.toDomainModel() }
+        }
+    }
+
     // Tags
     fun getAllTags(): Flow<List<Tag>> = tagDao.getAllTags()
 
@@ -71,6 +135,20 @@ class OrganizationRepository @Inject constructor(
 
     fun getRepositoriesWithTag(tagId: Int): Flow<List<RepositoryEntity>> {
         return repositoryTagDao.getRepositoriesWithTag(tagId)
+    }
+
+    fun getRepositoriesWithTagPaging(tagId: Int): Flow<PagingData<GitHubRepository>> {
+        return Pager(
+            config = PagingConfig(
+                pageSize = PAGE_SIZE,
+                prefetchDistance = PREFETCH_DISTANCE,
+                initialLoadSize = INITIAL_LOAD_SIZE,
+                enablePlaceholders = false
+            ),
+            pagingSourceFactory = { repositoryTagDao.getRepositoriesWithTagPaging(tagId) }
+        ).flow.map { pagingData ->
+            pagingData.map { it.toDomainModel() }
+        }
     }
 
     // Repository queries
