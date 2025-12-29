@@ -38,6 +38,14 @@ class StarredReposRemoteMediator @Inject constructor(
     private val repoDao = database.repositoryDao()
     private val syncMetadataDao = database.syncMetadataDao()
 
+    /**
+     * Called on first Pager collection to determine if initial refresh is needed.
+     * Returns LAUNCH_INITIAL_REFRESH to always fetch fresh data when the Pager starts.
+     */
+    override suspend fun initialize(): InitializeAction {
+        return InitializeAction.LAUNCH_INITIAL_REFRESH
+    }
+
     override suspend fun load(
         loadType: LoadType,
         state: PagingState<Int, RepositoryEntity>
