@@ -16,6 +16,12 @@ import javax.inject.Inject
  * RemoteMediator for starred repositories.
  * Handles fetching data from GitHub API and storing in local database.
  * Implements incremental sync strategy based on created_at timestamps.
+ *
+ * Sync Strategy:
+ * - On REFRESH: Check if we have recent data (within 1 hour)
+ * - If recent: Fetch only first page and insert new repos (incremental)
+ * - If stale or no data: Clear DB and fetch all (full refresh)
+ * - On APPEND: Continue fetching next pages
  */
 @OptIn(ExperimentalPagingApi::class)
 class StarredReposRemoteMediator @Inject constructor(
@@ -26,6 +32,7 @@ class StarredReposRemoteMediator @Inject constructor(
     companion object {
         private const val DATA_TYPE = "starred_repos"
         private const val GITHUB_PAGE_SIZE = 100
+        private const val STALE_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
     }
 
     private val repoDao = database.repositoryDao()
@@ -36,6 +43,12 @@ class StarredReposRemoteMediator @Inject constructor(
         state: PagingState<Int, RepositoryEntity>
     ): MediatorResult {
         return try {
+            // Check sync metadata to determine if we need full or incremental sync
+            val syncMetadata = syncMetadataDao.getMetadata(DATA_TYPE)
+            val currentTime = System.currentTimeMillis()
+            val isStale = syncMetadata == null ||
+                    (currentTime - syncMetadata.lastSyncTimestamp) > STALE_THRESHOLD_MS
+
             // Determine which page to load
             val page = when (loadType) {
                 LoadType.REFRESH -> 1
@@ -45,7 +58,6 @@ class StarredReposRemoteMediator @Inject constructor(
                 }
                 LoadType.APPEND -> {
                     // For append, we need to get the next page
-                    // The page number is embedded in the pagination state
                     val lastItem = state.lastItemOrNull()
                     if (lastItem == null) {
                         1
@@ -57,23 +69,43 @@ class StarredReposRemoteMediator @Inject constructor(
                 }
             }
 
-            // Fetch data from GitHub API
+            // Fetch data from GitHub API with descending order by created date
             val repos = apiService.getStarredRepositories(
                 page = page,
-                perPage = GITHUB_PAGE_SIZE
+                perPage = GITHUB_PAGE_SIZE,
+                sort = "created"
             )
 
             // Check if we've reached the end
             val endOfPaginationReached = repos.isEmpty() || repos.size < GITHUB_PAGE_SIZE
 
             database.withTransaction {
-                // On refresh, clear the database
                 if (loadType == LoadType.REFRESH) {
-                    repoDao.deleteAll()
+                    if (isStale) {
+                        // Full refresh: clear database and insert all
+                        repoDao.deleteAll()
+                        repoDao.insertRepositories(repos.map { it.toEntity() })
+                    } else {
+                        // Incremental sync: only insert new repos created after last sync
+                        val lastCreatedAt = syncMetadata?.lastItemCreatedAt
+                        if (lastCreatedAt != null) {
+                            // Filter repos created after our last synced item
+                            val newRepos = repos.filter { repo ->
+                                repo.createdAt > lastCreatedAt
+                            }
+                            if (newRepos.isNotEmpty()) {
+                                // Insert only new repos
+                                repoDao.insertRepositories(newRepos.map { it.toEntity() })
+                            }
+                        } else {
+                            // No timestamp available, insert all
+                            repoDao.insertRepositories(repos.map { it.toEntity() })
+                        }
+                    }
+                } else {
+                    // APPEND: Always insert all fetched repos
+                    repoDao.insertRepositories(repos.map { it.toEntity() })
                 }
-
-                // Insert new repos (REPLACE strategy handles updates)
-                repoDao.insertRepositories(repos.map { it.toEntity() })
 
                 // Update sync metadata
                 if (repos.isNotEmpty()) {
@@ -81,7 +113,7 @@ class StarredReposRemoteMediator @Inject constructor(
                     syncMetadataDao.updateMetadata(
                         SyncMetadata(
                             dataType = DATA_TYPE,
-                            lastSyncTimestamp = System.currentTimeMillis(),
+                            lastSyncTimestamp = currentTime,
                             lastItemCreatedAt = mostRecentCreatedAt
                         )
                     )
