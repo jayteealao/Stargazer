@@ -61,14 +61,6 @@ class OrganizationRepository @Inject constructor(
 
     // Paging methods for displaying repository lists
     fun getRepositoriesPagingSorted(sortBy: SortOption): Flow<PagingData<GitHubRepository>> {
-        val pagingSourceFactory = when (sortBy) {
-            SortOption.STARS -> { repositoryDao.getRepositoriesByStarsPaging() }
-            SortOption.FORKS -> { repositoryDao.getRepositoriesByForksPaging() }
-            SortOption.UPDATED -> { repositoryDao.getRepositoriesByUpdatedPaging() }
-            SortOption.CREATED -> { repositoryDao.getRepositoriesByCreatedPaging() }
-            SortOption.NAME -> { repositoryDao.getRepositoriesByNamePaging() }
-        }
-
         return Pager(
             config = PagingConfig(
                 pageSize = PAGE_SIZE,
@@ -76,7 +68,15 @@ class OrganizationRepository @Inject constructor(
                 initialLoadSize = INITIAL_LOAD_SIZE,
                 enablePlaceholders = false
             ),
-            pagingSourceFactory = pagingSourceFactory
+            pagingSourceFactory = {
+                when (sortBy) {
+                    SortOption.STARS -> repositoryDao.getRepositoriesByStarsPaging()
+                    SortOption.FORKS -> repositoryDao.getRepositoriesByForksPaging()
+                    SortOption.UPDATED -> repositoryDao.getRepositoriesByUpdatedPaging()
+                    SortOption.CREATED -> repositoryDao.getRepositoriesByCreatedPaging()
+                    SortOption.NAME -> repositoryDao.getRepositoriesByNamePaging()
+                }
+            }
         ).flow.map { pagingData ->
             pagingData.map { it.toDomainModel() }
         }
