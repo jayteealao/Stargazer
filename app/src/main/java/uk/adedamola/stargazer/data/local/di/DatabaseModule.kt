@@ -18,6 +18,8 @@ package uk.adedamola.stargazer.data.local.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,8 +30,20 @@ import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.local.database.RepositoryTagDao
 import uk.adedamola.stargazer.data.local.database.SearchPresetDao
 import uk.adedamola.stargazer.data.local.database.StargazerDao
+import uk.adedamola.stargazer.data.local.database.SyncMetadataDao
 import uk.adedamola.stargazer.data.local.database.TagDao
 import javax.inject.Singleton
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add starredAt column to repositories table
+        db.execSQL("ALTER TABLE repositories ADD COLUMN starredAt INTEGER DEFAULT NULL")
+
+        // Add new columns to sync_metadata table
+        db.execSQL("ALTER TABLE sync_metadata ADD COLUMN isInitialSyncComplete INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE sync_metadata ADD COLUMN newestStarredAt INTEGER DEFAULT NULL")
+    }
+}
 
 
 @Module
@@ -61,13 +75,20 @@ class DatabaseModule {
     }
 
     @Provides
+    fun provideSyncMetadataDao(appDatabase: AppDatabase): SyncMetadataDao {
+        return appDatabase.syncMetadataDao()
+    }
+
+    @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext appContext: Context): AppDatabase {
         return Room.databaseBuilder(
-            appContext,
-            AppDatabase::class.java,
-            "Stargazer"
-        ).fallbackToDestructiveMigration()
+                appContext,
+                AppDatabase::class.java,
+                "Stargazer"
+            )
+            .addMigrations(MIGRATION_4_5)
+            .fallbackToDestructiveMigration(false)
             .build()
     }
 }

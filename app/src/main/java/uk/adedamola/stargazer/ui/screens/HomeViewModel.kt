@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
+import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
@@ -71,8 +72,11 @@ class HomeViewModel @Inject constructor(
             initialValue = savedStateHandle.get<String>(SEARCH_QUERY_KEY)?.trim() ?: ""
         )
 
-    private val _sortOption = MutableStateFlow(SortOption.STARS)
+    private val _sortOption = MutableStateFlow(SortOption.STARRED)
     val sortOption: StateFlow<SortOption> = _sortOption.asStateFlow()
+
+    // Sync progress from the repository
+    val syncProgress: StateFlow<SyncProgress> = gitHubRepository.syncProgress
 
     private val _selectedLanguage = MutableStateFlow<String?>(null)
     val selectedLanguage: StateFlow<String?> = _selectedLanguage.asStateFlow()
@@ -261,7 +265,7 @@ class HomeViewModel @Inject constructor(
         _showFavoritesOnly.value = false
         _showPinnedOnly.value = false
         _selectedTagId.value = null
-        _sortOption.value = SortOption.STARS
+        _sortOption.value = SortOption.STARRED
     }
 
     /**

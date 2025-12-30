@@ -6,14 +6,13 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.mappers.toDomainModel
-import uk.adedamola.stargazer.data.mappers.toEntity
 import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
-import uk.adedamola.stargazer.data.remote.api.GitHubApiService
+import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository as GitHubRepoModel
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,9 +24,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class GitHubRepositoryImpl @Inject constructor(
-    private val apiService: GitHubApiService,
     private val repositoryDao: RepositoryDao,
-    private val database: AppDatabase
+    private val remoteMediator: StarredReposRemoteMediator
 ) : GitHubRepository {
 
     companion object {
@@ -36,10 +34,13 @@ class GitHubRepositoryImpl @Inject constructor(
         private const val INITIAL_LOAD_SIZE = 40
     }
 
+    override val syncProgress: StateFlow<SyncProgress> = remoteMediator.syncProgress
+
     /**
      * Returns a paged flow of starred repositories with sorting.
      * Uses RemoteMediator to sync from GitHub API to local DB.
      * Room DB is the single source of truth.
+     * Default sort is STARRED (by starred_at - order user starred on GitHub).
      */
     @OptIn(ExperimentalPagingApi::class)
     override fun getStarredRepositoriesPaging(sortBy: SortOption): Flow<PagingData<GitHubRepoModel>> {
@@ -50,12 +51,10 @@ class GitHubRepositoryImpl @Inject constructor(
                 initialLoadSize = INITIAL_LOAD_SIZE,
                 enablePlaceholders = false
             ),
-            remoteMediator = StarredReposRemoteMediator(
-                apiService = apiService,
-                database = database
-            ),
+            remoteMediator = remoteMediator,
             pagingSourceFactory = {
                 when (sortBy) {
+                    SortOption.STARRED -> repositoryDao.getRepositoriesByStarredAtPaging()
                     SortOption.STARS -> repositoryDao.getRepositoriesByStarsPaging()
                     SortOption.FORKS -> repositoryDao.getRepositoriesByForksPaging()
                     SortOption.UPDATED -> repositoryDao.getRepositoriesByUpdatedPaging()

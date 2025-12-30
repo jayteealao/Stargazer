@@ -205,7 +205,10 @@ private fun SortOptionRow(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = option.name.replace("_", " "),
+            text = when (option) {
+                SortOption.STARRED -> "RECENTLY STARRED"
+                else -> option.name.replace("_", " ")
+            },
             fontFamily = FontFamily.Monospace,
             color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f)
         )

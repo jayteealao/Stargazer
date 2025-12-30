@@ -2,9 +2,11 @@ package uk.adedamola.stargazer.data.remote.api
 
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
+import uk.adedamola.stargazer.data.remote.model.StarredRepository
 
 interface GitHubApiService {
 
@@ -19,6 +21,23 @@ interface GitHubApiService {
         @Query("per_page") perPage: Int = 30,
         @Query("sort") sort: String = "created"
     ): List<GitHubRepository>
+
+    /**
+     * Get starred repositories with starred_at timestamp for the authenticated user.
+     * Uses special Accept header to get the starred_at timestamp.
+     * @param page Page number for pagination
+     * @param perPage Number of results per page (max 100)
+     * @param sort Sort by "created" (when starred) or "updated" (when repo updated)
+     * @param direction Sort direction "desc" or "asc"
+     */
+    @Headers("Accept: application/vnd.github.star+json")
+    @GET("user/starred")
+    suspend fun getStarredRepositoriesWithTimestamp(
+        @Query("page") page: Int = 1,
+        @Query("per_page") perPage: Int = 100,
+        @Query("sort") sort: String = "created",
+        @Query("direction") direction: String = "desc"
+    ): List<StarredRepository>
 
     /**
      * Get starred repositories for a specific user
