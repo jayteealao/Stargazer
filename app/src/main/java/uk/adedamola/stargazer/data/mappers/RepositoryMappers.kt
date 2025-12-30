@@ -2,8 +2,10 @@ package uk.adedamola.stargazer.data.mappers
 
 import uk.adedamola.stargazer.data.local.database.RepositoryEntity
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
+import uk.adedamola.stargazer.data.remote.model.StarredRepository
+import java.time.Instant
 
-fun GitHubRepository.toEntity(): RepositoryEntity {
+fun GitHubRepository.toEntity(starredAt: Long? = null): RepositoryEntity {
     return RepositoryEntity(
         id = id,
         name = name,
@@ -26,8 +28,18 @@ fun GitHubRepository.toEntity(): RepositoryEntity {
         defaultBranch = defaultBranch,
         topics = topics.joinToString(","),
         visibility = visibility,
-        licenseName = license?.name
+        licenseName = license?.name,
+        starredAt = starredAt
     )
+}
+
+fun StarredRepository.toEntity(): RepositoryEntity {
+    val starredAtMillis = try {
+        Instant.parse(starredAt).toEpochMilli()
+    } catch (e: Exception) {
+        null
+    }
+    return repo.toEntity(starredAt = starredAtMillis)
 }
 
 fun RepositoryEntity.toDomainModel(): GitHubRepository {

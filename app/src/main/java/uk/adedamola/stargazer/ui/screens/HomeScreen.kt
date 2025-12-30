@@ -1,13 +1,22 @@
 package uk.adedamola.stargazer.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,6 +52,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import kotlinx.coroutines.launch
+import uk.adedamola.stargazer.data.paging.SyncPhase
 import uk.adedamola.stargazer.ui.components.CreateTagDialog
 import uk.adedamola.stargazer.ui.components.FilterDrawerContent
 import uk.adedamola.stargazer.ui.components.RepoCard
@@ -64,6 +74,7 @@ fun HomeScreen(
     val showPinnedOnly by viewModel.showPinnedOnly.collectAsState()
     val selectedTagId by viewModel.selectedTagId.collectAsState()
     val allTags by viewModel.allTags.collectAsState()
+    val syncProgress by viewModel.syncProgress.collectAsState()
 
     // Track repository states locally (favorite, pinned, tags)
     val repositoryStates = remember { mutableStateMapOf<Int, RepositoryState>() }
@@ -150,6 +161,37 @@ fun HomeScreen(
                     query = searchQuery,
                     onQueryChange = viewModel::onSearchQueryChange
                 )
+
+                // Sync Progress Indicator
+                if (syncProgress.isLoading) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = FactoryOrange.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(0.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = FactoryOrange,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = when (syncProgress.phase) {
+                                SyncPhase.INITIAL_SYNC -> "SYNCING_STARRED_REPOS... ${syncProgress.loadedCount} LOADED"
+                                SyncPhase.INCREMENTAL_SYNC -> "CHECKING_FOR_NEW_STARS..."
+                                else -> "SYNCING..."
+                            },
+                            fontFamily = FontFamily.Monospace,
+                            color = Color.White.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
 
                 // Repository List
                 PullToRefreshBox(
@@ -282,7 +324,9 @@ fun HomeScreen(
                                             selectedRepositoryForTags = repo.id to repo.fullName
                                             showTagAssignmentSheet = true
                                         },
-                                        modifier = Modifier.clickable { onRepoClick(repo.fullName) }
+                                        modifier = Modifier
+                                            .animateItem()
+                                            .clickable { onRepoClick(repo.fullName) }
                                     )
                                 }
                             }

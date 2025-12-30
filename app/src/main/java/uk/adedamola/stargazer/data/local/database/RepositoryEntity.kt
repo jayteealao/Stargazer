@@ -38,7 +38,8 @@ data class RepositoryEntity(
     val licenseName: String?,
     val cachedAt: Long = System.currentTimeMillis(),
     val isFavorite: Boolean = false,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val starredAt: Long? = null  // Timestamp when user starred the repo on GitHub
 )
 
 @Dao
@@ -117,7 +118,8 @@ interface RepositoryDao {
                     topics = repo.topics,
                     visibility = repo.visibility,
                     licenseName = repo.licenseName,
-                    cachedAt = repo.cachedAt
+                    cachedAt = repo.cachedAt,
+                    starredAt = repo.starredAt ?: existing.starredAt
                     // isFavorite and isPinned are NOT updated - they're preserved!
                 )
             } else {
@@ -153,7 +155,8 @@ interface RepositoryDao {
             topics = :topics,
             visibility = :visibility,
             licenseName = :licenseName,
-            cachedAt = :cachedAt
+            cachedAt = :cachedAt,
+            starredAt = :starredAt
         WHERE id = :id
     """)
     suspend fun updateRepositoryFromApi(
@@ -179,7 +182,8 @@ interface RepositoryDao {
         topics: String,
         visibility: String,
         licenseName: String?,
-        cachedAt: Long
+        cachedAt: Long,
+        starredAt: Long?
     )
 
     // Keep old methods for compatibility but mark as deprecated
@@ -212,6 +216,9 @@ interface RepositoryDao {
     fun getPinnedRepositoriesPaging(): PagingSource<Int, RepositoryEntity>
 
     // Paging queries with different sort orders
+    @Query("SELECT * FROM repositories ORDER BY starredAt DESC")
+    fun getRepositoriesByStarredAtPaging(): PagingSource<Int, RepositoryEntity>
+
     @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
     fun getRepositoriesByStarsPaging(): PagingSource<Int, RepositoryEntity>
 
@@ -262,4 +269,17 @@ interface RepositoryDao {
 
     @Query("SELECT * FROM repositories WHERE stargazersCount >= :minStars AND stargazersCount <= :maxStars")
     fun getRepositoriesByStarRange(minStars: Int, maxStars: Int): Flow<List<RepositoryEntity>>
+
+    // Sync-related queries
+    @Query("SELECT MAX(starredAt) FROM repositories")
+    suspend fun getNewestStarredAt(): Long?
+
+    @Query("SELECT COUNT(*) FROM repositories")
+    suspend fun getRepositoryCount(): Int
+
+    @Query("SELECT COUNT(*) FROM repositories WHERE starredAt IS NOT NULL")
+    suspend fun getRepositoryCountWithStarredAt(): Int
+
+    @Query("SELECT * FROM repositories ORDER BY starredAt DESC")
+    fun getRepositoriesByStarredAt(): Flow<List<RepositoryEntity>>
 }

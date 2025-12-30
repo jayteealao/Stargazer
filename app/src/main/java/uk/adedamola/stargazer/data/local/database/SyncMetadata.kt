@@ -15,7 +15,9 @@ data class SyncMetadata(
     @PrimaryKey
     val dataType: String,  // e.g., "starred_repos"
     val lastSyncTimestamp: Long = System.currentTimeMillis(),
-    val lastItemCreatedAt: String? = null  // GitHub's created_at of the most recent item
+    val lastItemCreatedAt: String? = null,  // GitHub's created_at of the most recent item
+    val isInitialSyncComplete: Boolean = false,  // Whether initial full sync has completed
+    val newestStarredAt: Long? = null  // Timestamp of most recently starred repo (for incremental sync)
 )
 
 @Dao

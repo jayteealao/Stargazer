@@ -20,7 +20,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class SortOption {
-    STARS, FORKS, UPDATED, CREATED, NAME
+    STARRED,  // Default: by starred_at DESC (order user starred on GitHub)
+    STARS,
+    FORKS,
+    UPDATED,
+    CREATED,
+    NAME
 }
 
 /**
@@ -70,6 +75,7 @@ class OrganizationRepository @Inject constructor(
             ),
             pagingSourceFactory = {
                 when (sortBy) {
+                    SortOption.STARRED -> repositoryDao.getRepositoriesByStarredAtPaging()
                     SortOption.STARS -> repositoryDao.getRepositoriesByStarsPaging()
                     SortOption.FORKS -> repositoryDao.getRepositoriesByForksPaging()
                     SortOption.UPDATED -> repositoryDao.getRepositoriesByUpdatedPaging()
@@ -176,6 +182,7 @@ class OrganizationRepository @Inject constructor(
     // Sorting
     fun getRepositoriesSorted(sortBy: SortOption): Flow<List<RepositoryEntity>> {
         return when (sortBy) {
+            SortOption.STARRED -> repositoryDao.getRepositoriesByStarredAt()
             SortOption.STARS -> repositoryDao.getRepositoriesByStars()
             SortOption.FORKS -> repositoryDao.getRepositoriesByForks()
             SortOption.UPDATED -> repositoryDao.getRepositoriesByUpdated()
