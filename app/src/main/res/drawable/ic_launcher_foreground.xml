@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer targeting ring (cyan) -->
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.6"
+        android:fillColor="#00000000"
+        android:pathData="M54,24 A30,30 0 1,1 54,84 A30,30 0 1,1 54,24 Z"/>
+
+    <!-- Targeting crosshairs (cyan) -->
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.8"
+        android:pathData="M54,18 L54,30"/>
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.8"
+        android:pathData="M54,78 L54,90"/>
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.8"
+        android:pathData="M18,54 L30,54"/>
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.8"
+        android:pathData="M78,54 L90,54"/>
+
+    <!-- Corner brackets (cyan) -->
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.9"
+        android:pathData="M30,30 L30,24 L24,24"/>
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.9"
+        android:pathData="M78,30 L78,24 L84,24"/>
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.9"
+        android:pathData="M30,78 L30,84 L24,84"/>
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.9"
+        android:pathData="M78,78 L78,84 L84,84"/>
+
+    <!-- Main star (orange) -->
+    <path
+        android:fillColor="#FF6600"
+        android:pathData="M54,38 L57.8,48.4 L68.8,49.6 L61.4,56.6 L63.6,67.4 L54,62 L44.4,67.4 L46.6,56.6 L39.2,49.6 L50.2,48.4 Z"/>
+
+    <!-- Inner star highlight (yellow) -->
+    <path
+        android:fillColor="#FFCC00"
+        android:fillAlpha="0.4"
+        android:pathData="M54,42 L56.4,48.8 L63.6,49.5 L58.8,54 L60.3,61.1 L54,57.5 L47.7,61.1 L49.2,54 L44.4,49.5 L51.6,48.8 Z"/>
+
+    <!-- Center dot (cyan) -->
+    <path
+        android:fillColor="#00CCFF"
+        android:pathData="M54,54 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0"/>
+
+    <!-- Scan line effect (cyan, subtle) -->
+    <path
+        android:strokeColor="#00CCFF"
+        android:strokeWidth="1"
+        android:strokeAlpha="0.3"
+        android:pathData="M24,54 L84,54"/>
+</vector>
