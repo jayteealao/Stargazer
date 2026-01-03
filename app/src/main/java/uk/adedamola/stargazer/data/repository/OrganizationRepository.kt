@@ -162,6 +162,24 @@ class OrganizationRepository @Inject constructor(
         return repositoryDao.getRepositoryById(id)
     }
 
+    fun getDistinctLanguages(): Flow<List<String>> {
+        return repositoryDao.getDistinctLanguages()
+    }
+
+    fun getRepositoriesByStarRangePaging(minStars: Int, maxStars: Int): Flow<PagingData<GitHubRepository>> {
+        return Pager(
+            config = PagingConfig(
+                pageSize = PAGE_SIZE,
+                prefetchDistance = PREFETCH_DISTANCE,
+                initialLoadSize = INITIAL_LOAD_SIZE,
+                enablePlaceholders = false
+            ),
+            pagingSourceFactory = { repositoryDao.getRepositoriesByStarRangePaging(minStars, maxStars) }
+        ).flow.map { pagingData ->
+            pagingData.map { it.toDomainModel() }
+        }
+    }
+
     // Favorites and Pinned
     suspend fun toggleFavorite(repositoryId: Int, isFavorite: Boolean) {
         repositoryDao.updateFavorite(repositoryId, isFavorite)

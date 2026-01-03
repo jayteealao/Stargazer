@@ -75,6 +75,11 @@ fun HomeScreen(
     val selectedTagId by viewModel.selectedTagId.collectAsState()
     val allTags by viewModel.allTags.collectAsState()
     val syncProgress by viewModel.syncProgress.collectAsState()
+    val selectedLanguage by viewModel.selectedLanguage.collectAsState()
+    val availableLanguages by viewModel.availableLanguages.collectAsState()
+    val minStars by viewModel.minStars.collectAsState()
+    val maxStars by viewModel.maxStars.collectAsState()
+    val savedPresets by viewModel.savedPresets.collectAsState()
 
     // Track repository states locally (favorite, pinned, tags)
     val repositoryStates = remember { mutableStateMapOf<Int, RepositoryState>() }
@@ -99,6 +104,11 @@ fun HomeScreen(
                     showPinnedOnly = showPinnedOnly,
                     selectedTag = allTags.find { it.id == selectedTagId },
                     availableTags = allTags,
+                    selectedLanguage = selectedLanguage,
+                    availableLanguages = availableLanguages,
+                    minStars = minStars,
+                    maxStars = maxStars,
+                    savedPresets = savedPresets,
                     onSortChange = {
                         viewModel.setSortOption(it)
                         scope.launch { drawerState.close() }
@@ -114,6 +124,23 @@ fun HomeScreen(
                     onTagSelect = { tag ->
                         viewModel.filterByTag(tag?.id)
                         scope.launch { drawerState.close() }
+                    },
+                    onLanguageSelect = { language ->
+                        viewModel.filterByLanguage(language)
+                        scope.launch { drawerState.close() }
+                    },
+                    onStarRangeChange = { min, max ->
+                        viewModel.setStarRange(min, max)
+                    },
+                    onSavePreset = { name ->
+                        viewModel.saveCurrentAsPreset(name)
+                    },
+                    onLoadPreset = { preset ->
+                        viewModel.loadPreset(preset)
+                        scope.launch { drawerState.close() }
+                    },
+                    onDeletePreset = { preset ->
+                        viewModel.deletePreset(preset)
                     },
                     onClearFilters = {
                         viewModel.clearAllFilters()

@@ -38,6 +38,8 @@ private data class FilterState(
     val query: String,
     val sortBy: SortOption,
     val language: String?,
+    val minStars: Int?,
+    val maxStars: Int?,
     val favoritesOnly: Boolean,
     val pinnedOnly: Boolean,
     val tagId: Int?
@@ -90,8 +92,22 @@ class HomeViewModel @Inject constructor(
     private val _selectedTagId = MutableStateFlow<Int?>(null)
     val selectedTagId: StateFlow<Int?> = _selectedTagId.asStateFlow()
 
+    private val _minStars = MutableStateFlow<Int?>(null)
+    val minStars: StateFlow<Int?> = _minStars.asStateFlow()
+
+    private val _maxStars = MutableStateFlow<Int?>(null)
+    val maxStars: StateFlow<Int?> = _maxStars.asStateFlow()
+
     // All available tags - automatically managed lifecycle with stateIn()
     val allTags: StateFlow<List<Tag>> = organizationRepository.getAllTags()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // All available languages - automatically managed lifecycle with stateIn()
+    val availableLanguages: StateFlow<List<String>> = organizationRepository.getDistinctLanguages()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -115,6 +131,8 @@ class HomeViewModel @Inject constructor(
         _debouncedSearchQuery,
         _sortOption,
         _selectedLanguage,
+        _minStars,
+        _maxStars,
         _showFavoritesOnly,
         _showPinnedOnly,
         _selectedTagId
@@ -123,9 +141,11 @@ class HomeViewModel @Inject constructor(
             query = flows[0] as String,
             sortBy = flows[1] as SortOption,
             language = flows[2] as String?,
-            favoritesOnly = flows[3] as Boolean,
-            pinnedOnly = flows[4] as Boolean,
-            tagId = flows[5] as Int?
+            minStars = flows[3] as Int?,
+            maxStars = flows[4] as Int?,
+            favoritesOnly = flows[5] as Boolean,
+            pinnedOnly = flows[6] as Boolean,
+            tagId = flows[7] as Int?
         )
     }.flatMapLatest { filterState ->
         when {
@@ -143,6 +163,9 @@ class HomeViewModel @Inject constructor(
             }
             filterState.language != null -> {
                 gitHubRepository.getRepositoriesByLanguagePaging(filterState.language)
+            }
+            filterState.minStars != null && filterState.maxStars != null -> {
+                organizationRepository.getRepositoriesByStarRangePaging(filterState.minStars, filterState.maxStars)
             }
             else -> {
                 // Default: show all starred repos with selected sort option
@@ -170,6 +193,11 @@ class HomeViewModel @Inject constructor(
 
     fun filterByLanguage(language: String?) {
         _selectedLanguage.value = language
+    }
+
+    fun setStarRange(minStars: Int?, maxStars: Int?) {
+        _minStars.value = minStars
+        _maxStars.value = maxStars
     }
 
     fun toggleFavoritesFilter() {
@@ -232,8 +260,8 @@ class HomeViewModel @Inject constructor(
                 name = presetName,
                 sortBy = _sortOption.value.name.lowercase(),
                 filterLanguage = _selectedLanguage.value,
-                filterMinStars = null,
-                filterMaxStars = null,
+                filterMinStars = _minStars.value,
+                filterMaxStars = _maxStars.value,
                 filterFavoritesOnly = _showFavoritesOnly.value,
                 filterPinnedOnly = _showPinnedOnly.value,
                 searchQuery = _rawSearchQuery.value.trim().takeIf { it.isNotBlank() }
@@ -245,6 +273,8 @@ class HomeViewModel @Inject constructor(
     fun loadPreset(preset: SearchPreset) {
         _sortOption.value = SortOption.valueOf(preset.sortBy.uppercase())
         _selectedLanguage.value = preset.filterLanguage
+        _minStars.value = preset.filterMinStars
+        _maxStars.value = preset.filterMaxStars
         _showFavoritesOnly.value = preset.filterFavoritesOnly
         _showPinnedOnly.value = preset.filterPinnedOnly
         val query = preset.searchQuery ?: ""
@@ -262,6 +292,8 @@ class HomeViewModel @Inject constructor(
         _rawSearchQuery.value = ""
         savedStateHandle[SEARCH_QUERY_KEY] = ""
         _selectedLanguage.value = null
+        _minStars.value = null
+        _maxStars.value = null
         _showFavoritesOnly.value = false
         _showPinnedOnly.value = false
         _selectedTagId.value = null
