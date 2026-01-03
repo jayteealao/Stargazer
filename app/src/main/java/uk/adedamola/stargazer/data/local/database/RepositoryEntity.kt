@@ -63,6 +63,9 @@ interface RepositoryDao {
     @Query("SELECT * FROM repositories WHERE language = :language ORDER BY stargazersCount DESC")
     fun getRepositoriesByLanguagePaging(language: String): PagingSource<Int, RepositoryEntity>
 
+    @Query("SELECT * FROM repositories WHERE stargazersCount >= :minStars AND stargazersCount <= :maxStars ORDER BY stargazersCount DESC")
+    fun getRepositoriesByStarRangePaging(minStars: Int, maxStars: Int): PagingSource<Int, RepositoryEntity>
+
     // Non-paging queries for single items or counts
     @Query("SELECT * FROM repositories ORDER BY stargazersCount DESC")
     fun getAllRepositories(): Flow<List<RepositoryEntity>>
@@ -84,6 +87,9 @@ interface RepositoryDao {
 
     @Query("SELECT * FROM repositories WHERE language = :language ORDER BY stargazersCount DESC")
     fun getRepositoriesByLanguage(language: String): Flow<List<RepositoryEntity>>
+
+    @Query("SELECT DISTINCT language FROM repositories WHERE language IS NOT NULL AND language != '' ORDER BY language ASC")
+    fun getDistinctLanguages(): Flow<List<String>>
 
     /**
      * Upserts repositories from API while preserving local user data.
