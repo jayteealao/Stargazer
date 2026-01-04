@@ -3,23 +3,34 @@ package uk.adedamola.stargazer.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,6 +71,7 @@ import uk.adedamola.stargazer.ui.theme.FactoryOrange
 import uk.adedamola.stargazer.ui.theme.FactoryYellow
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FilterDrawerContent(
     sortOption: SortOption,
@@ -72,6 +84,7 @@ fun FilterDrawerContent(
     minStars: Int?,
     maxStars: Int?,
     savedPresets: List<uk.adedamola.stargazer.data.local.database.SearchPreset>,
+    matchingReposCount: Int?,
     onSortChange: (SortOption) -> Unit,
     onFavoritesToggle: () -> Unit,
     onPinnedToggle: () -> Unit,
@@ -82,16 +95,27 @@ fun FilterDrawerContent(
     onLoadPreset: (uk.adedamola.stargazer.data.local.database.SearchPreset) -> Unit,
     onDeletePreset: (uk.adedamola.stargazer.data.local.database.SearchPreset) -> Unit,
     onClearFilters: () -> Unit,
+    onApplyFilters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    // Collapsible section states
+    var expandedPresets by remember { mutableStateOf(false) }
+    var expandedSort by remember { mutableStateOf(true) }
+    var expandedFilters by remember { mutableStateOf(true) }
+    var expandedTags by remember { mutableStateOf(false) }
+
+    Box(
         modifier = modifier
             .fillMaxHeight()
             .width(300.dp)
             .background(FactoryDarkGrey)
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 16.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 80.dp) // Space for sticky Apply button
+        ) {
         // Header
         Column(
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -111,16 +135,203 @@ fun FilterDrawerContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Active Filters Chips Section
+        val hasActiveFilters = showFavoritesOnly || showPinnedOnly || selectedTag != null ||
+                               selectedLanguage != null || (minStars != null && maxStars != null)
+
+        if (hasActiveFilters) {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "ACTIVE_FILTERS",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = FactoryCyan
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (selectedLanguage != null) {
+                        AssistChip(
+                            onClick = { onLanguageSelect(null) },
+                            label = {
+                                Text(
+                                    text = selectedLanguage,
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = FactoryCyan.copy(alpha = 0.2f),
+                                labelColor = FactoryCyan,
+                                trailingIconContentColor = FactoryCyan
+                            )
+                        )
+                    }
+
+                    if (minStars != null || maxStars != null) {
+                        AssistChip(
+                            onClick = { onStarRangeChange(null, null) },
+                            label = {
+                                Text(
+                                    text = "⭐ ${minStars ?: 0}-${maxStars ?: "∞"}",
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = FactoryYellow.copy(alpha = 0.2f),
+                                labelColor = FactoryYellow,
+                                trailingIconContentColor = FactoryYellow
+                            )
+                        )
+                    }
+
+                    if (showFavoritesOnly) {
+                        AssistChip(
+                            onClick = onFavoritesToggle,
+                            label = {
+                                Text(
+                                    text = "FAVORITES",
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = FactoryYellow.copy(alpha = 0.2f),
+                                labelColor = FactoryYellow,
+                                trailingIconContentColor = FactoryYellow
+                            )
+                        )
+                    }
+
+                    if (showPinnedOnly) {
+                        AssistChip(
+                            onClick = onPinnedToggle,
+                            label = {
+                                Text(
+                                    text = "PINNED",
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = FactoryOrange.copy(alpha = 0.2f),
+                                labelColor = FactoryOrange,
+                                trailingIconContentColor = FactoryOrange
+                            )
+                        )
+                    }
+
+                    if (selectedTag != null) {
+                        val tagColor = try {
+                            Color(android.graphics.Color.parseColor(selectedTag.color))
+                        } catch (e: Exception) {
+                            FactoryCyan
+                        }
+                        AssistChip(
+                            onClick = { onTagSelect(null) },
+                            label = {
+                                Text(
+                                    text = selectedTag.name.uppercase(),
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = tagColor.copy(alpha = 0.2f),
+                                labelColor = tagColor,
+                                trailingIconContentColor = tagColor
+                            )
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Live Preview Count
+        if (matchingReposCount != null && hasActiveFilters) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(FactoryOrange.copy(alpha = 0.1f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "MATCHES:",
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+                Text(
+                    text = "$matchingReposCount REPOS",
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = FactoryOrange
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
         // Search Presets Section
-        if (savedPresets.isNotEmpty() || true) { // Always show to allow saving
-            var showSavePresetDialog by remember { mutableStateOf(false) }
-            var expandedPresets by remember { mutableStateOf(false) }
+        var showSavePresetDialog by remember { mutableStateOf(false) }
 
-            SectionHeader(text = "PRESETS")
+        SectionHeader(
+            text = "🔍 PRESETS",
+            isExpanded = expandedPresets,
+            onToggle = { expandedPresets = !expandedPresets }
+        )
 
+        if (expandedPresets) {
             // Save current filters button
             TextButton(
                 onClick = { showSavePresetDialog = true },
@@ -143,164 +354,230 @@ fun FilterDrawerContent(
 
             // Saved presets list
             if (savedPresets.isNotEmpty()) {
-                Text(
-                    text = if (expandedPresets) "▼ SAVED (${savedPresets.size})" else "▶ SAVED (${savedPresets.size})",
-                    fontFamily = FontFamily.Monospace,
-                    color = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { expandedPresets = !expandedPresets }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                if (expandedPresets) {
-                    savedPresets.forEach { preset ->
-                        PresetRow(
-                            preset = preset,
-                            onLoad = {
-                                onLoadPreset(preset)
-                                expandedPresets = false
-                            },
-                            onDelete = { onDeletePreset(preset) }
-                        )
-                    }
+                savedPresets.forEach { preset ->
+                    PresetRow(
+                        preset = preset,
+                        onLoad = { onLoadPreset(preset) },
+                        onDelete = { onDeletePreset(preset) }
+                    )
                 }
             }
-
-            if (showSavePresetDialog) {
-                SavePresetDialog(
-                    onDismiss = { showSavePresetDialog = false },
-                    onSave = { name ->
-                        onSavePreset(name)
-                        showSavePresetDialog = false
-                    }
-                )
-            }
-
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
         }
 
-        // Sort Section
-        SectionHeader(text = "SORT_BY")
-        SortOption.entries.forEach { option ->
-            SortOptionRow(
-                option = option,
-                isSelected = sortOption == option,
-                onClick = { onSortChange(option) }
+        if (showSavePresetDialog) {
+            SavePresetDialog(
+                onDismiss = { showSavePresetDialog = false },
+                onSave = { name ->
+                    onSavePreset(name)
+                    showSavePresetDialog = false
+                }
             )
+        }
+
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+        // Sort Section
+        SectionHeader(
+            text = "📊 SORT_BY",
+            isExpanded = expandedSort,
+            onToggle = { expandedSort = !expandedSort }
+        )
+
+        if (expandedSort) {
+            SortOption.entries.forEach { option ->
+                SortOptionRow(
+                    option = option,
+                    isSelected = sortOption == option,
+                    onClick = { onSortChange(option) }
+                )
+            }
         }
 
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
         // Filters Section
-        SectionHeader(text = "FILTERS")
-        FilterToggleRow(
-            label = "FAVORITES_ONLY",
-            isChecked = showFavoritesOnly,
-            onToggle = onFavoritesToggle,
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = if (showFavoritesOnly) FactoryYellow else Color.White.copy(alpha = 0.6f)
-                )
-            }
-        )
-        FilterToggleRow(
-            label = "PINNED_ONLY",
-            isChecked = showPinnedOnly,
-            onToggle = onPinnedToggle,
-            icon = {
-                Icon(
-                    imageVector = Icons.Outlined.PushPin,
-                    contentDescription = null,
-                    tint = if (showPinnedOnly) FactoryOrange else Color.White.copy(alpha = 0.6f)
-                )
-            }
+        SectionHeader(
+            text = "🎯 FILTERS",
+            isExpanded = expandedFilters,
+            onToggle = { expandedFilters = !expandedFilters }
         )
 
-        // Language Filter Section
-        if (availableLanguages.isNotEmpty()) {
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-            SectionHeader(text = "LANGUAGE")
+        if (expandedFilters) {
+            FilterToggleRow(
+                label = "FAVORITES_ONLY",
+                isChecked = showFavoritesOnly,
+                onToggle = onFavoritesToggle,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = if (showFavoritesOnly) FactoryYellow else Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            )
+            FilterToggleRow(
+                label = "PINNED_ONLY",
+                isChecked = showPinnedOnly,
+                onToggle = onPinnedToggle,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Outlined.PushPin,
+                        contentDescription = null,
+                        tint = if (showPinnedOnly) FactoryOrange else Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            )
 
-            LanguageFilterDropdown(
-                selectedLanguage = selectedLanguage,
-                availableLanguages = availableLanguages,
-                onLanguageSelect = onLanguageSelect
+            // Language Filter
+            if (availableLanguages.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "LANGUAGE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                LanguageFilterDropdown(
+                    selectedLanguage = selectedLanguage,
+                    availableLanguages = availableLanguages,
+                    onLanguageSelect = onLanguageSelect
+                )
+            }
+
+            // Star Range
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "STAR_RANGE",
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            StarRangeSlider(
+                minStars = minStars,
+                maxStars = maxStars,
+                onStarRangeChange = onStarRangeChange
             )
         }
-
-        // Star Range Filter Section
-        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-        SectionHeader(text = "STAR_RANGE")
-
-        StarRangeSlider(
-            minStars = minStars,
-            maxStars = maxStars,
-            onStarRangeChange = onStarRangeChange
-        )
 
         // Tags Section
         if (availableTags.isNotEmpty()) {
             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-            SectionHeader(text = "TAGS")
-
-            TagOptionRow(
-                label = "ALL_TAGS",
-                color = Color.White,
-                isSelected = selectedTag == null,
-                onClick = { onTagSelect(null) }
+            SectionHeader(
+                text = "🏷️ TAGS",
+                isExpanded = expandedTags,
+                onToggle = { expandedTags = !expandedTags }
             )
 
-            availableTags.forEach { tag ->
-                val tagColor = try {
-                    Color(android.graphics.Color.parseColor(tag.color))
-                } catch (e: Exception) {
-                    FactoryCyan
-                }
+            if (expandedTags) {
                 TagOptionRow(
-                    label = tag.name.uppercase(),
-                    color = tagColor,
-                    isSelected = selectedTag?.id == tag.id,
-                    onClick = { onTagSelect(tag) }
+                    label = "ALL_TAGS",
+                    color = Color.White,
+                    isSelected = selectedTag == null,
+                    onClick = { onTagSelect(null) }
                 )
+
+                availableTags.forEach { tag ->
+                    val tagColor = try {
+                        Color(android.graphics.Color.parseColor(tag.color))
+                    } catch (e: Exception) {
+                        FactoryCyan
+                    }
+                    TagOptionRow(
+                        label = tag.name.uppercase(),
+                        color = tagColor,
+                        isSelected = selectedTag?.id == tag.id,
+                        onClick = { onTagSelect(tag) }
+                    )
+                }
             }
         }
 
-        // Clear Filters Button
-        val hasActiveFilters = showFavoritesOnly || showPinnedOnly || selectedTag != null ||
-                               selectedLanguage != null || (minStars != null && maxStars != null)
-        if (hasActiveFilters) {
-            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-            Spacer(modifier = Modifier.height(16.dp))
-            TextButton(
-                onClick = onClearFilters,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+        }
+
+        // Sticky Apply/Clear Buttons
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(FactoryDarkGrey)
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
+        ) {
+            HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Apply Filters Button
+            Button(
+                onClick = onApplyFilters,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = FactoryOrange,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(4.dp)
             ) {
-                Text(
-                    text = "[ CLEAR_FILTERS ]",
-                    fontFamily = FontFamily.Monospace,
-                    color = FactoryOrange
+                Icon(
+                    imageVector = Icons.Default.Done,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "APPLY_FILTERS",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Clear All Button
+            if (hasActiveFilters) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = onClearFilters,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "[ CLEAR_ALL ]",
+                        fontFamily = FontFamily.Monospace,
+                        color = FactoryCyan
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Bold,
-        color = FactoryCyan,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-    )
+private fun SectionHeader(
+    text: String,
+    isExpanded: Boolean = true,
+    onToggle: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = onToggle != null) { onToggle?.invoke() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = FactoryCyan
+        )
+        if (onToggle != null) {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = FactoryCyan,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
 }
 
 @Composable
