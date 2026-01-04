@@ -111,41 +111,21 @@ fun HomeScreen(
                     minStars = minStars,
                     maxStars = maxStars,
                     savedPresets = savedPresets,
-                    onSortChange = {
-                        viewModel.setSortOption(it)
-                        scope.launch { drawerState.close() }
-                    },
-                    onFavoritesToggle = {
-                        viewModel.toggleFavoritesFilter()
-                        scope.launch { drawerState.close() }
-                    },
-                    onPinnedToggle = {
-                        viewModel.togglePinnedFilter()
-                        scope.launch { drawerState.close() }
-                    },
-                    onTagSelect = { tag ->
-                        viewModel.filterByTag(tag?.id)
-                        scope.launch { drawerState.close() }
-                    },
-                    onLanguageSelect = { language ->
-                        viewModel.filterByLanguage(language)
-                        scope.launch { drawerState.close() }
-                    },
-                    onStarRangeChange = { min, max ->
-                        viewModel.setStarRange(min, max)
-                    },
-                    onSavePreset = { name ->
-                        viewModel.saveCurrentAsPreset(name)
-                    },
+                    matchingReposCount = repositories.itemCount,
+                    onSortChange = { viewModel.setSortOption(it) },
+                    onFavoritesToggle = { viewModel.toggleFavoritesFilter() },
+                    onPinnedToggle = { viewModel.togglePinnedFilter() },
+                    onTagSelect = { tag -> viewModel.filterByTag(tag?.id) },
+                    onLanguageSelect = { language -> viewModel.filterByLanguage(language) },
+                    onStarRangeChange = { min, max -> viewModel.setStarRange(min, max) },
+                    onSavePreset = { name -> viewModel.saveCurrentAsPreset(name) },
                     onLoadPreset = { preset ->
                         viewModel.loadPreset(preset)
                         scope.launch { drawerState.close() }
                     },
-                    onDeletePreset = { preset ->
-                        viewModel.deletePreset(preset)
-                    },
-                    onClearFilters = {
-                        viewModel.clearAllFilters()
+                    onDeletePreset = { preset -> viewModel.deletePreset(preset) },
+                    onClearFilters = { viewModel.clearAllFilters() },
+                    onApplyFilters = {
                         scope.launch { drawerState.close() }
                     }
                 )
