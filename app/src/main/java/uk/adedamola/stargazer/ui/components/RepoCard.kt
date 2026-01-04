@@ -1,5 +1,7 @@
 package uk.adedamola.stargazer.ui.components
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.PushPin
@@ -31,9 +34,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.ui.theme.FactoryBorder
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
@@ -43,11 +49,15 @@ import uk.adedamola.stargazer.ui.theme.FactoryYellow
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RepoCard(
+    repoId: Int,
     repoName: String,
     repoDescription: String,
     language: String,
     stars: Int,
     owner: String,
+    ownerAvatarUrl: String,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     modifier: Modifier = Modifier,
     isFavorite: Boolean = false,
     isPinned: Boolean = false,
@@ -56,36 +66,68 @@ fun RepoCard(
     onPinClick: () -> Unit = {},
     onTagsClick: () -> Unit = {}
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(BorderStroke(1.dp, FactoryBorder)),
-        colors = CardDefaults.cardColors(
-            containerColor = FactorySurfaceGrey
-        ),
-        shape = androidx.compose.ui.graphics.RectangleShape
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+    with(sharedTransitionScope) {
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .sharedBounds(
+                    sharedContentState = rememberSharedContentState(key = "card-$repoId"),
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+                .border(BorderStroke(1.dp, FactoryBorder)),
+            colors = CardDefaults.cardColors(
+                containerColor = FactorySurfaceGrey
+            ),
+            shape = androidx.compose.ui.graphics.RectangleShape
         ) {
-            // Header Row: Owner / Repo + Action Icons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+            Column(
+                modifier = Modifier.padding(16.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "$owner /",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = repoName,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // Header Row: Owner Avatar + Owner / Repo + Action Icons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Owner Avatar (shared element)
+                        AsyncImage(
+                            model = ownerAvatarUrl,
+                            contentDescription = "Owner avatar",
+                            modifier = Modifier
+                                .sharedElement(
+                                    state = rememberSharedContentState(key = "avatar-$repoId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                                .size(40.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "$owner /",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.sharedElement(
+                                    state = rememberSharedContentState(key = "owner-$repoId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            )
+                            Text(
+                                text = repoName,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.sharedElement(
+                                    state = rememberSharedContentState(key = "name-$repoId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            )
+                        }
+                    }
 
                 // Action Icons
                 Row {
@@ -206,13 +248,18 @@ fun RepoCard(
                     )
                 }
 
-                // Stars
+                // Stars (shared element)
                 Text(
                     text = "★ $stars",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.tertiary
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.sharedElement(
+                        state = rememberSharedContentState(key = "stars-$repoId"),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
                 )
             }
         }
+    }
     }
 }

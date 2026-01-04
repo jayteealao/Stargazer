@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.ui
 
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateListOf
@@ -27,7 +28,7 @@ import javax.inject.Inject
 sealed interface Screen {
     data object Login : Screen
     data object Home : Screen
-    data class Detail(val repoName: String) : Screen
+    data class Detail(val repoName: String, val repoId: Int) : Screen
 }
 
 @HiltViewModel
@@ -58,29 +59,38 @@ fun StargazerApp(
         backStack.removeLastOrNull()
     }
 
-    // 2. Use NavDisplay to display content based on the back stack
-    NavDisplay(
-        backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
-        entryProvider = entryProvider {
-            entry<Screen.Login> {
-                LoginScreen(
-                    onLoginSuccess = {
-                        backStack.clear()
-                        backStack.add(Screen.Home)
-                    }
-                )
+    // 2. Wrap NavDisplay in SharedTransitionLayout for shared element transitions
+    SharedTransitionLayout {
+        NavDisplay(
+            backStack = backStack,
+            onBack = { backStack.removeLastOrNull() },
+            entryProvider = entryProvider {
+                entry<Screen.Login> {
+                    LoginScreen(
+                        onLoginSuccess = {
+                            backStack.clear()
+                            backStack.add(Screen.Home)
+                        }
+                    )
+                }
+                entry<Screen.Home> {
+                    HomeScreen(
+                        onRepoClick = { repoName, repoId ->
+                            backStack.add(Screen.Detail(repoName, repoId))
+                        },
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedVisibilityScope = this
+                    )
+                }
+                entry<Screen.Detail> { key ->
+                    DetailScreen(
+                        repoName = key.repoName,
+                        repoId = key.repoId,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedVisibilityScope = this
+                    )
+                }
             }
-            entry<Screen.Home> {
-                HomeScreen(
-                    onRepoClick = { repoName ->
-                        backStack.add(Screen.Detail(repoName))
-                    }
-                )
-            }
-            entry<Screen.Detail> { key ->
-                DetailScreen(repoName = key.repoName)
-            }
-        }
-    )
+        )
+    }
 }
