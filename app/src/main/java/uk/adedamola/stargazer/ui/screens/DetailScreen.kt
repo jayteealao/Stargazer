@@ -1,5 +1,7 @@
 package uk.adedamola.stargazer.ui.screens
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
@@ -44,6 +48,9 @@ import uk.adedamola.stargazer.ui.theme.FactoryYellow
 @Composable
 fun DetailScreen(
     repoName: String?,
+    repoId: Int,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -93,42 +100,61 @@ fun DetailScreen(
 
             is DetailUiState.Success -> {
                 val repo = state.repository
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
-                ) {
-                    // Owner Avatar and Name
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                with(sharedTransitionScope) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "card-$repoId"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp)
                     ) {
-                        AsyncImage(
-                            model = repo.owner.avatarUrl,
-                            contentDescription = "Owner avatar",
-                            modifier = Modifier.size(64.dp),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                text = repo.owner.login,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 20.sp,
-                                color = FactoryCyan,
-                                fontWeight = FontWeight.Bold
+                        // Owner Avatar and Name
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AsyncImage(
+                                model = repo.owner.avatarUrl,
+                                contentDescription = "Owner avatar",
+                                modifier = Modifier
+                                    .sharedElement(
+                                        state = rememberSharedContentState(key = "avatar-$repoId"),
+                                        animatedVisibilityScope = animatedVisibilityScope
+                                    )
+                                    .size(64.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
                             )
-                            Text(
-                                text = repo.name,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 24.sp,
-                                color = FactoryOrange,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = repo.owner.login,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 20.sp,
+                                    color = FactoryCyan,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.sharedElement(
+                                        state = rememberSharedContentState(key = "owner-$repoId"),
+                                        animatedVisibilityScope = animatedVisibilityScope
+                                    )
+                                )
+                                Text(
+                                    text = repo.name,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 24.sp,
+                                    color = FactoryOrange,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.sharedElement(
+                                        state = rememberSharedContentState(key = "name-$repoId"),
+                                        animatedVisibilityScope = animatedVisibilityScope
+                                    )
+                                )
+                            }
                         }
-                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -158,7 +184,28 @@ fun DetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        StatItem("STARS", repo.stargazersCount.toString(), FactoryYellow)
+                        // Stars with shared element
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.sharedElement(
+                                state = rememberSharedContentState(key = "stars-$repoId"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        ) {
+                            Text(
+                                text = "STARS",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                text = "★ ${repo.stargazersCount}",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FactoryYellow
+                            )
+                        }
                         StatItem("FORKS", repo.forksCount.toString(), FactoryCyan)
                         StatItem("WATCHERS", repo.watchersCount.toString(), FactoryOrange)
                     }

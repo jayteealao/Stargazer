@@ -64,7 +64,9 @@ import uk.adedamola.stargazer.ui.theme.FactoryOrange
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRepoClick: (String) -> Unit,
+    onRepoClick: (String, Int) -> Unit,
+    sharedTransitionScope: androidx.compose.animation.SharedTransitionScope,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val repositories = viewModel.repositories.collectAsLazyPagingItems()
@@ -319,11 +321,13 @@ fun HomeScreen(
 
                                     val repoState = repositoryStates[repo.id]
                                     RepoCard(
+                                        repoId = repo.id,
                                         repoName = repo.name,
                                         repoDescription = repo.description ?: "No description available",
                                         language = repo.language ?: "Unknown",
                                         stars = repo.stargazersCount,
                                         owner = repo.owner.login,
+                                        ownerAvatarUrl = repo.owner.avatarUrl,
                                         isFavorite = repoState?.isFavorite ?: false,
                                         isPinned = repoState?.isPinned ?: false,
                                         tags = repoState?.tags ?: emptyList(),
@@ -351,9 +355,11 @@ fun HomeScreen(
                                             selectedRepositoryForTags = repo.id to repo.fullName
                                             showTagAssignmentSheet = true
                                         },
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
                                         modifier = Modifier
                                             .animateItem()
-                                            .clickable { onRepoClick(repo.fullName) }
+                                            .clickable { onRepoClick(repo.fullName, repo.id) }
                                     )
                                 }
                             }
