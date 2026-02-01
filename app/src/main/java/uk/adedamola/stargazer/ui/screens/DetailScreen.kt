@@ -2,6 +2,7 @@ package uk.adedamola.stargazer.ui.screens
 
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -33,12 +36,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.mikepenz.markdown.coil3.Coil3ImageTransformerImpl
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.highlightedCodeBlock
+import com.mikepenz.markdown.compose.elements.highlightedCodeFence
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
+import uk.adedamola.stargazer.R
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
@@ -67,7 +81,7 @@ fun DetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "REPOSITORY_DETAILS",
+                        text = repoName?.split("/")?.lastOrNull()?.uppercase() ?: "REPOSITORY",
                         fontFamily = FontFamily.Monospace
                     )
                 },
@@ -100,6 +114,8 @@ fun DetailScreen(
 
             is DetailUiState.Success -> {
                 val repo = state.repository
+                val readme = state.readme
+                val uriHandler = LocalUriHandler.current
                 with(sharedTransitionScope) {
                     Column(
                         modifier = Modifier
@@ -122,7 +138,7 @@ fun DetailScreen(
                                 contentDescription = "Owner avatar",
                                 modifier = Modifier
                                     .sharedElement(
-                                        state = rememberSharedContentState(key = "avatar-$repoId"),
+                                        sharedContentState = rememberSharedContentState(key = "avatar-$repoId"),
                                         animatedVisibilityScope = animatedVisibilityScope
                                     )
                                     .size(64.dp)
@@ -138,7 +154,7 @@ fun DetailScreen(
                                     color = FactoryCyan,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.sharedElement(
-                                        state = rememberSharedContentState(key = "owner-$repoId"),
+                                        sharedContentState = rememberSharedContentState(key = "owner-$repoId"),
                                         animatedVisibilityScope = animatedVisibilityScope
                                     )
                                 )
@@ -149,115 +165,91 @@ fun DetailScreen(
                                     color = FactoryOrange,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.sharedElement(
-                                        state = rememberSharedContentState(key = "name-$repoId"),
+                                        sharedContentState = rememberSharedContentState(key = "name-$repoId"),
                                         animatedVisibilityScope = animatedVisibilityScope
                                     )
                                 )
                             }
                         }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Description
-                    if (repo.description != null) {
-                        Text(
-                            text = "DESCRIPTION:",
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
-                        Text(
-                            text = repo.description,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 14.sp,
-                            color = Color.White,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-                        )
-                    }
-
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Stats Grid
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // Stars with shared element
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.sharedElement(
-                                state = rememberSharedContentState(key = "stars-$repoId"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        ) {
+                        // Description
+                        if (repo.description != null) {
                             Text(
-                                text = "STARS",
+                                text = repo.description,
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                color = Color.White.copy(alpha = 0.6f)
-                            )
-                            Text(
-                                text = "★ ${repo.stargazersCount}",
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = FactoryYellow
+                                fontSize = 14.sp,
+                                color = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.padding(bottom = 16.dp)
                             )
                         }
-                        StatItem("FORKS", repo.forksCount.toString(), FactoryCyan)
-                        StatItem("WATCHERS", repo.watchersCount.toString(), FactoryOrange)
-                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                        // Stats Row - ABOVE divider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Stars with shared element
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = "stars-$repoId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            ) {
+                                Text(
+                                    text = "STARS",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp,
+                                    color = Color.White.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "★ ${repo.stargazersCount}",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FactoryYellow
+                                )
+                            }
+                            StatItem("FORKS", repo.forksCount.toString(), FactoryCyan)
+                            StatItem("WATCHERS", repo.watchersCount.toString(), FactoryOrange)
 
-                    // Language
-                    if (repo.language != null) {
-                        DetailItem("LANGUAGE", repo.language)
-                    }
+                            // GitHub icon button (inline with stats)
+                            IconButton(
+                                onClick = { uriHandler.openUri(repo.htmlUrl) },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color.White, CircleShape)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_github),
+                                    contentDescription = "Open on GitHub",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
 
-                    // Default Branch
-                    DetailItem("DEFAULT_BRANCH", repo.defaultBranch)
-
-                    // License
-                    if (repo.license != null) {
-                        DetailItem("LICENSE", repo.license.name)
-                    }
-
-                    // Open Issues
-                    DetailItem("OPEN_ISSUES", repo.openIssuesCount.toString())
-
-                    // Visibility
-                    DetailItem("VISIBILITY", repo.visibility.uppercase())
-
-                    // Created At
-                    DetailItem("CREATED", repo.createdAt)
-
-                    // Updated At
-                    DetailItem("LAST_UPDATED", repo.updatedAt)
-
-                    // Homepage
-                    if (!repo.homepage.isNullOrBlank()) {
-                        DetailItem("HOMEPAGE", repo.homepage)
-                    }
-
-                    // Topics
-                    if (repo.topics.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "TOPICS:",
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
-                        Text(
-                            text = repo.topics.joinToString(", "),
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 14.sp,
-                            color = FactoryCyan,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+
+                        // Divider
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // README Content
+                        if (readme != null) {
+                            ReadmeContent(markdown = readme)
+                        } else {
+                            Text(
+                                text = "NO_README_AVAILABLE",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                color = Color.White.copy(alpha = 0.4f)
+                            )
+                        }
                     }
                 }
             }
@@ -282,6 +274,33 @@ fun DetailScreen(
 }
 
 @Composable
+fun ReadmeContent(markdown: String) {
+    Markdown(
+        content = markdown,
+        imageTransformer = Coil3ImageTransformerImpl,
+        components = markdownComponents(
+            codeBlock = highlightedCodeBlock,
+            codeFence = highlightedCodeFence
+        ),
+        colors = markdownColor(
+            text = Color.White
+        ),
+        typography = markdownTypography(
+            text = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                color = Color.White
+            ),
+            code = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                color = FactoryCyan
+            )
+        )
+    )
+}
+
+@Composable
 fun StatItem(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -296,25 +315,6 @@ fun StatItem(label: String, value: String, color: Color) {
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = color
-        )
-    }
-}
-
-@Composable
-fun DetailItem(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(
-            text = "$label:",
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            color = Color.White.copy(alpha = 0.6f)
-        )
-        Text(
-            text = value,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 14.sp,
-            color = Color.White,
-            modifier = Modifier.padding(top = 2.dp)
         )
     }
 }

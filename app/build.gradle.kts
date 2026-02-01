@@ -33,8 +33,8 @@ android {
         applicationId = "uk.adedamola.stargazer"
         minSdk = 23
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "uk.adedamola.stargazer.HiltTestRunner"
         vectorDrawables {
@@ -135,6 +135,7 @@ dependencies {
     // Networking
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
+    implementation("com.squareup.retrofit2:converter-scalars:3.0.0")
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
@@ -143,12 +144,17 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
 
+    // Markdown rendering
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.39.0")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-coil3:0.39.0")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-code:0.39.0")
+
     // Compose
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.material.icons.extended)
     // Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
     // Instrumented tests
