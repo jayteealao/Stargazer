@@ -144,10 +144,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
 
-    // Markdown rendering
-    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.39.0")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-coil3:0.39.0")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-code:0.39.0")
+    // WebView for rendering GitHub-flavored markdown HTML
+    implementation(libs.compose.webview)
 
     // Compose
     implementation(libs.androidx.compose.ui)

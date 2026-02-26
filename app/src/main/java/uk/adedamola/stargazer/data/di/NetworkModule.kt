@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import retrofit2.converter.scalars.ScalarsConverterFactory
 import uk.adedamola.stargazer.BuildConfig
 import uk.adedamola.stargazer.data.auth.AuthInterceptor
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
@@ -70,6 +71,7 @@ object NetworkModule {
         return Retrofit.Builder()
             .baseUrl(GitHubApiService.BASE_URL)
             .client(okHttpClient)
+            .addConverterFactory(ScalarsConverterFactory.create())
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
     }

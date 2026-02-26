@@ -15,7 +15,10 @@ import javax.inject.Inject
 
 sealed interface DetailUiState {
     object Loading : DetailUiState
-    data class Success(val repository: GitHubRepository) : DetailUiState
+    data class Success(
+        val repository: GitHubRepository,
+        val readme: String? = null
+    ) : DetailUiState
     data class Error(val message: String) : DetailUiState
 }
 
@@ -39,7 +42,20 @@ class DetailViewModel @Inject constructor(
             when (val result = gitHubRepository.getRepositoryByFullName(fullName)) {
                 is Result.Success -> {
                     if (result.data != null) {
-                        _uiState.value = DetailUiState.Success(result.data)
+                        val repo = result.data
+                        // Fetch README
+                        val readme = try {
+                            val parts = fullName.split("/")
+                            if (parts.size == 2) {
+                                when (val readmeResult = gitHubRepository.getRepositoryReadme(parts[0], parts[1])) {
+                                    is Result.Success -> readmeResult.data
+                                    else -> null
+                                }
+                            } else null
+                        } catch (e: Exception) {
+                            null
+                        }
+                        _uiState.value = DetailUiState.Success(repo, readme)
                     } else {
                         _uiState.value = DetailUiState.Error("Repository not found")
                     }
