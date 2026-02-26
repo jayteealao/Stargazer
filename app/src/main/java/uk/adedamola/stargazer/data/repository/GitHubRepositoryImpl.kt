@@ -13,6 +13,8 @@ import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.mappers.toDomainModel
 import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
 import uk.adedamola.stargazer.data.paging.SyncProgress
+import uk.adedamola.stargazer.data.remote.api.GitHubApiService
+import uk.adedamola.stargazer.data.remote.api.MarkdownRenderRequest
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository as GitHubRepoModel
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,7 +27,8 @@ import javax.inject.Singleton
 @Singleton
 class GitHubRepositoryImpl @Inject constructor(
     private val repositoryDao: RepositoryDao,
-    private val remoteMediator: StarredReposRemoteMediator
+    private val remoteMediator: StarredReposRemoteMediator,
+    private val apiService: GitHubApiService
 ) : GitHubRepository {
 
     companion object {
@@ -112,6 +115,27 @@ class GitHubRepositoryImpl @Inject constructor(
             val cachedRepos = repositoryDao.getAllRepositories().first()
             val foundRepo = cachedRepos.find { it.fullName == fullName }?.toDomainModel()
             Result.Success(foundRepo)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
+    /**
+     * Gets the README content for a repository, rendered as HTML via GitHub's GFM API.
+     * 1. Fetches raw markdown from the readme endpoint
+     * 2. Sends markdown to POST /markdown for GFM rendering with repo context
+     */
+    override suspend fun getRepositoryReadme(owner: String, repo: String): Result<String> {
+        return try {
+            val rawMarkdown = apiService.getReadme(owner, repo)
+            val renderedHtml = apiService.renderMarkdown(
+                MarkdownRenderRequest(
+                    text = rawMarkdown,
+                    mode = "gfm",
+                    context = "$owner/$repo"
+                )
+            )
+            Result.Success(renderedHtml)
         } catch (e: Exception) {
             Result.Error(e)
         }

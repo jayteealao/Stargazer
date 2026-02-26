@@ -25,6 +25,9 @@ interface GitHubRepository {
     // Non-paging methods for single items
     suspend fun getRepositoryByFullName(fullName: String): Result<GitHubRepoModel?>
 
+    // Get README content for a repository
+    suspend fun getRepositoryReadme(owner: String, repo: String): Result<String>
+
     // Trigger manual refresh
     suspend fun refreshStarredRepositories(): Result<Unit>
 }

@@ -1,8 +1,10 @@
 package uk.adedamola.stargazer.data.remote.api
 
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
@@ -65,6 +67,29 @@ interface GitHubApiService {
         @Query("per_page") perPage: Int = 30
     ): SearchResponse
 
+    /**
+     * Get the README content for a repository as raw text
+     * @param owner Repository owner
+     * @param repo Repository name
+     */
+    @Headers("Accept: application/vnd.github.v3.raw")
+    @GET("repos/{owner}/{repo}/readme")
+    suspend fun getReadme(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): String
+
+    /**
+     * Render markdown text as GitHub-Flavored Markdown HTML.
+     * @param request The markdown rendering request containing text, mode, and context
+     * @return Rendered HTML string
+     */
+    @Headers("Accept: text/html")
+    @POST("markdown")
+    suspend fun renderMarkdown(
+        @Body request: MarkdownRenderRequest
+    ): String
+
     companion object {
         const val BASE_URL = "https://api.github.com/"
     }
@@ -78,4 +103,11 @@ data class SearchResponse(
     val incompleteResults: Boolean,
     @kotlinx.serialization.SerialName("items")
     val items: List<GitHubRepository>
+)
+
+@kotlinx.serialization.Serializable
+data class MarkdownRenderRequest(
+    val text: String,
+    val mode: String = "gfm",
+    val context: String? = null
 )

@@ -21,19 +21,18 @@ class AuthInterceptor @Inject constructor(
     private val lock = Any()
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        // Get token from cache or fetch it
         val token = getToken()
+        val originalRequest = chain.request()
+        val hasAcceptHeader = originalRequest.header("Accept") != null
 
-        val request = if (token != null) {
-            chain.request().newBuilder()
-                .addHeader("Authorization", "token $token")
-                .addHeader("Accept", "application/vnd.github.v3+json")
-                .build()
-        } else {
-            chain.request().newBuilder()
-                .addHeader("Accept", "application/vnd.github.v3+json")
-                .build()
-        }
+        val request = originalRequest.newBuilder().apply {
+            if (token != null) {
+                addHeader("Authorization", "token $token")
+            }
+            if (!hasAcceptHeader) {
+                addHeader("Accept", "application/vnd.github.v3+json")
+            }
+        }.build()
 
         return chain.proceed(request)
     }
