@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.activity.compose.BackHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
 import uk.adedamola.stargazer.ui.screens.DetailScreen
@@ -79,7 +80,7 @@ fun StargazerApp(
                             backStack.add(Screen.Detail(repoName, repoId))
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = this
+                        animatedVisibilityScope = LocalNavAnimatedContentScope.current
                     )
                 }
                 entry<Screen.Detail> { key ->
@@ -87,7 +88,7 @@ fun StargazerApp(
                         repoName = key.repoName,
                         repoId = key.repoId,
                         sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = this
+                        animatedVisibilityScope = LocalNavAnimatedContentScope.current
                     )
                 }
             }
