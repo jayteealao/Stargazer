@@ -99,7 +99,7 @@ fun RepoCard(
                             contentDescription = "Owner avatar",
                             modifier = Modifier
                                 .sharedElement(
-                                    state = rememberSharedContentState(key = "avatar-$repoId"),
+                                    sharedContentState = rememberSharedContentState(key = "avatar-$repoId"),
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
                                 .size(40.dp)
@@ -113,7 +113,7 @@ fun RepoCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.sharedElement(
-                                    state = rememberSharedContentState(key = "owner-$repoId"),
+                                    sharedContentState = rememberSharedContentState(key = "owner-$repoId"),
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
                             )
@@ -122,7 +122,7 @@ fun RepoCard(
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.sharedElement(
-                                    state = rememberSharedContentState(key = "name-$repoId"),
+                                    sharedContentState = rememberSharedContentState(key = "name-$repoId"),
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
                             )
@@ -254,7 +254,7 @@ fun RepoCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.sharedElement(
-                        state = rememberSharedContentState(key = "stars-$repoId"),
+                        sharedContentState = rememberSharedContentState(key = "stars-$repoId"),
                         animatedVisibilityScope = animatedVisibilityScope
                     )
                 )

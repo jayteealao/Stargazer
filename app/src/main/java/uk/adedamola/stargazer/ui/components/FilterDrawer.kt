@@ -110,6 +110,10 @@ fun FilterDrawerContent(
             .width(300.dp)
             .background(FactoryDarkGrey)
     ) {
+        // Calculate hasActiveFilters here so it's accessible throughout the Box
+        val hasActiveFilters = showFavoritesOnly || showPinnedOnly || selectedTag != null ||
+                               selectedLanguage != null || (minStars != null && maxStars != null)
+
         Column(
             modifier = Modifier
                 .fillMaxHeight()
@@ -138,9 +142,6 @@ fun FilterDrawerContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Active Filters Chips Section
-        val hasActiveFilters = showFavoritesOnly || showPinnedOnly || selectedTag != null ||
-                               selectedLanguage != null || (minStars != null && maxStars != null)
-
         if (hasActiveFilters) {
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp)

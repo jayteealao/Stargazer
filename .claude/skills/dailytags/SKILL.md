@@ -67,8 +67,9 @@ Source Text → Rules → Parser → Nodes → Render → AnnotatedString → Te
 ### 1. Simple Markdown Rendering
 
 ```kotlin
-import com.dmytroshuba.dailytags.rules.MarkdownRules
-import com.dmytroshuba.dailytags.SimpleMarkupParser
+import com.dmytroshuba.dailytags.markdown.rules.MarkdownRules
+import com.dmytroshuba.dailytags.core.simple.SimpleMarkupParser
+import com.dmytroshuba.dailytags.core.simple.render
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 
@@ -92,7 +93,7 @@ MarkdownText("**Bold text** and *italic text*")
 ### 2. Markdown + HTML Combined
 
 ```kotlin
-import com.dmytroshuba.dailytags.rules.HtmlRules
+import com.dmytroshuba.dailytags.markdown.rules.HtmlRules
 
 @Composable
 fun RichText(source: String) {
@@ -146,7 +147,7 @@ Use the `toRule()` extension function:
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import com.dmytroshuba.dailytags.toRule
+import com.dmytroshuba.dailytags.core.simple.toRule
 
 // Basic styling
 val blueHighlightRule = PATTERN_HIGHLIGHT_BLUE.toRule(
@@ -855,10 +856,11 @@ val rules = listOf(
 ### Essential Imports
 
 ```kotlin
-import com.dmytroshuba.dailytags.SimpleMarkupParser
-import com.dmytroshuba.dailytags.rules.MarkdownRules
-import com.dmytroshuba.dailytags.rules.HtmlRules
-import com.dmytroshuba.dailytags.toRule
+import com.dmytroshuba.dailytags.core.simple.SimpleMarkupParser
+import com.dmytroshuba.dailytags.core.simple.render
+import com.dmytroshuba.dailytags.core.simple.toRule
+import com.dmytroshuba.dailytags.markdown.rules.MarkdownRules
+import com.dmytroshuba.dailytags.markdown.rules.HtmlRules
 import java.util.regex.Pattern
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.ParagraphStyle
