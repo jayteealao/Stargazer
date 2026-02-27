@@ -21,7 +21,7 @@
 
     <style name="Theme.Stargazer.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#1A1A1A</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="postSplashScreenTheme">@style/Theme.Stargazer</item>
     </style>
 </resources>
