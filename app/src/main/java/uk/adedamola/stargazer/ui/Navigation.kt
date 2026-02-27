@@ -32,35 +32,42 @@ sealed interface Screen {
     data class Detail(val repoName: String, val repoId: Int) : Screen
 }
 
+sealed interface AuthState {
+    data object Loading : AuthState
+    data object Authenticated : AuthState
+    data object Unauthenticated : AuthState
+}
+
 @HiltViewModel
 class NavigationViewModel @Inject constructor(
     tokenManager: TokenManager
 ) : ViewModel() {
-    val isAuthenticated: StateFlow<Boolean> = tokenManager.token
-        .map { it != null && it.isNotBlank() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val authState: StateFlow<AuthState> = tokenManager.token
+        .map { token ->
+            if (token != null && token.isNotBlank()) AuthState.Authenticated
+            else AuthState.Unauthenticated
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AuthState.Loading)
 }
 
 @Composable
 fun StargazerApp(
     navigationViewModel: NavigationViewModel = hiltViewModel()
 ) {
-    val isAuthenticated by navigationViewModel.isAuthenticated.collectAsState()
+    val authState by navigationViewModel.authState.collectAsState()
 
-    // 1. Create a back stack, specifying the key the app should start with
-    val initialScreen = if (isAuthenticated) Screen.Home else Screen.Login
-    val backStack = remember(isAuthenticated) {
+    // Don't render anything while auth state is loading — the native splash screen stays visible
+    if (authState == AuthState.Loading) return
+
+    val initialScreen = if (authState == AuthState.Authenticated) Screen.Home else Screen.Login
+    val backStack = remember(authState) {
         mutableStateListOf<Any>(initialScreen)
     }
 
-    // Handle System Back Press
-    // If backStack has more than 1 item, pop the last one.
-    // Otherwise, allow system back (exit app).
     BackHandler(enabled = backStack.size > 1) {
         backStack.removeLastOrNull()
     }
 
-    // 2. Wrap NavDisplay in SharedTransitionLayout for shared element transitions
     SharedTransitionLayout {
         NavDisplay(
             backStack = backStack,
