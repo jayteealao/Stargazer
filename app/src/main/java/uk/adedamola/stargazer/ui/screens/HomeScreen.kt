@@ -127,7 +127,8 @@ fun HomeScreen(
                     onClearFilters = { viewModel.clearAllFilters() },
                     onApplyFilters = {
                         scope.launch { drawerState.close() }
-                    }
+                    },
+                    onLogout = { viewModel.logout() }
                 )
             }
         }

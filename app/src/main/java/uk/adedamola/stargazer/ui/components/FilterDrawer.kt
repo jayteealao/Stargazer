@@ -96,6 +96,7 @@ fun FilterDrawerContent(
     onDeletePreset: (uk.adedamola.stargazer.data.local.database.SearchPreset) -> Unit,
     onClearFilters: () -> Unit,
     onApplyFilters: () -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Collapsible section states
@@ -544,6 +545,19 @@ fun FilterDrawerContent(
                         color = FactoryCyan
                     )
                 }
+            }
+
+            // Logout Button
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "[ DISCONNECT_SESSION ]",
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
