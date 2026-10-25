@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The app asks GitHub only for permission to read and change your stars, so private starred repositories no longer appear and are removed after that notice
 - Every screen draws behind the system bars
+- Updating from 1.1: sign in with GitHub once. If the app cannot tell whose starred repositories, tags and presets are on the phone, it asks whether to keep or remove them
+- The personal access token from 1.1 is deleted from the phone but stays valid on GitHub; revoke it at github.com/settings/tokens
+- Signing out deletes the key on the phone only; to remove Stargazer's access, revoke it under GitHub Settings → Applications → Authorized GitHub Apps
 
 ### Removed
 - The token entry screen and the "update GitHub token" button

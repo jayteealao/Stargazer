@@ -22,7 +22,7 @@ import uk.adedamola.stargazer.data.di.NetworkModule
 import java.net.URLDecoder
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** The github.com sign-in client: no key, no client secret, no bodies in the log (AC-7). */
+/** The github.com sign-in client: no key, no client secret, no bodies in the log. */
 @RunWith(AndroidJUnit4::class)
 class SignInHttpClientTest {
 

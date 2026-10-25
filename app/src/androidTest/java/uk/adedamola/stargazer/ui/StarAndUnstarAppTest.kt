@@ -1,5 +1,8 @@
 package uk.adedamola.stargazer.ui
 
+import uk.adedamola.stargazer.data.repository.AccountRepository
+import uk.adedamola.stargazer.ui.screens.HomeGitHubSearch
+import uk.adedamola.stargazer.ui.screens.HomeRemovals
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SharedTransitionLayout
@@ -9,6 +12,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isOff
+import androidx.compose.ui.test.isOn
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -74,7 +79,7 @@ import java.util.concurrent.TimeUnit
  * answered by a scripted GitHub: unstar from the repo screen with Undo, the Home swipe and its
  * failure, starring a GitHub search result, and every state of the repo screen's star control.
  * Each state is checked for touch targets under the bars or the cutout and saved as a capture
- * named after its board (AC-29, AC-30, AC-31, AC-33, AC-34, AC-35, S7-1, AC-40e).
+ * named after its board.
  */
 class StarAndUnstarAppTest {
 
@@ -150,14 +155,12 @@ class StarAndUnstarAppTest {
             gitHubRepository = GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api),
             organizationRepository = OrganizationRepository(db.repositoryDao(), db.tagDao(), db.repositoryTagDao(), db.searchPresetDao()),
             accessSession = AccessSession(keys.tokenManager),
-            accountDao = db.accountDao(),
+            accounts = AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()),
             starListRepository = StarListRepository(db.starListDao()),
             refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L },
-            profileDao = db.gitHubProfileDao(),
             starEngine = engine,
-            gitHubSearch = GitHubSearch(api, db.repositoryDao()),
-            connectivity = connectivity,
-            reconciler = StarReconciler(api, db, engine),
+            searchFactory = HomeGitHubSearch.Factory(GitHubSearch(api, db.repositoryDao()), connectivity, engine),
+            removalsFactory = HomeRemovals.Factory(StarReconciler(api, db, engine)),
         )
         val detail = DetailViewModel(GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api), SavedStateHandle(), engine)
         check.render {
@@ -193,9 +196,13 @@ class StarAndUnstarAppTest {
             composeRule.onAllNodes(hasText(text)).fetchSemanticsNodes().isEmpty()
         }
 
-    private fun waitDescription(description: String, timeout: Long = 10_000) =
+    /** The star switch of [fullName] in the given state. */
+    private fun starToggle(fullName: String, starred: Boolean) =
+        hasContentDescription("Star $fullName") and (if (starred) isOn() else isOff())
+
+    private fun waitToggle(fullName: String, starred: Boolean, timeout: Long = 10_000) =
         composeRule.waitUntil(timeout) {
-            composeRule.onAllNodes(hasContentDescription(description)).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodes(starToggle(fullName, starred)).fetchSemanticsNodes().isNotEmpty()
         }
 
     private fun waitUntil(what: String, timeout: Long = 10_000, condition: () -> Boolean) =
@@ -208,7 +215,7 @@ class StarAndUnstarAppTest {
     private fun openDetail(n: Int) {
         waitFor("repo-$n")
         composeRule.onNode(hasText("repo-$n")).performClick()
-        waitDescription("Unstar fixture/repo-$n")
+        waitToggle("fixture/repo-$n", starred = true)
     }
 
     private fun backToHome() {
@@ -234,10 +241,10 @@ class StarAndUnstarAppTest {
         openDetail(1)
         waitFor("STARRED")
 
-        composeRule.onNode(hasContentDescription("Unstar fixture/repo-1")).performClick()
+        composeRule.onNode(starToggle("fixture/repo-1", starred = true)).performClick()
 
         waitUntil("one DELETE") { network.calls("DELETE", starPath("fixture", "repo-1")).size == 1 }
-        waitDescription("Star fixture/repo-1")
+        waitToggle("fixture/repo-1", starred = false)
         waitFor("UNSTARRED fixture/repo-1")
         capture("detail-star-toggle--not-starred")
 
@@ -308,17 +315,17 @@ class StarAndUnstarAppTest {
 
         waitFor("IN_YOUR_STARS · 0")
         waitFor("ON_GITHUB · 2,814")
-        waitDescription("Star JetBrains/kotlin")
-        waitDescription("Star square/retrofit")
-        waitDescription("Star Kotlin/kotlinx.coroutines")
+        waitToggle("JetBrains/kotlin", starred = false)
+        waitToggle("square/retrofit", starred = false)
+        waitToggle("Kotlin/kotlinx.coroutines", starred = false)
         capture("search-star-control--default")
 
-        composeRule.onNode(hasContentDescription("Star JetBrains/kotlin")).performClick()
+        composeRule.onNode(starToggle("JetBrains/kotlin", starred = false)).performClick()
         waitFor("SAVING…")
         capture("search-star-control--in-flight")
         answerPut.countDown()
 
-        waitDescription("Unstar JetBrains/kotlin")
+        waitToggle("JetBrains/kotlin", starred = true)
         waitUntil("the repo entered the starred list") { runBlocking { db.repositoryDao().getRepositoryById(4001) } != null }
         assertEquals(1, network.calls("PUT", starPath("JetBrains", "kotlin")).size)
         waitFor("STARRED")
@@ -335,25 +342,25 @@ class StarAndUnstarAppTest {
         waitFor("STARRED")
         capture("detail-star-toggle--starred")
 
-        composeRule.onNode(hasContentDescription("Unstar fixture/repo-4")).performClick()
+        composeRule.onNode(starToggle("fixture/repo-4", starred = true)).performClick()
         waitFor("SAVING…")
         capture("detail-star-toggle--in-flight")
         answerDelete.countDown()
 
         waitFor("UNSTAR_FAILED — GitHub did not confirm. The repo stays starred.")
         waitFor("[ RETRY ]")
-        waitDescription("Unstar fixture/repo-4")
+        waitToggle("fixture/repo-4", starred = true)
         capture("detail-star-toggle--failed")
 
         starAnswers["DELETE $path"] = { rateLimited(403, retryAfterSeconds = 600) }
         composeRule.onNode(hasText("[ RETRY ]")).performClick()
         waitFor("RATE_LIMITED — GitHub accepts more changes at ", substring = true)
-        composeRule.onNode(hasContentDescription("Unstar fixture/repo-4")).assertIsNotEnabled()
+        composeRule.onNode(starToggle("fixture/repo-4", starred = true)).assertIsNotEnabled()
         capture("detail-star-toggle--rate-limited")
 
         connectivity.set(false)
         waitFor("CONNECTION_NEEDED — starring needs the internet.")
-        composeRule.onNode(hasContentDescription("Unstar fixture/repo-4")).assertIsNotEnabled()
+        composeRule.onNode(starToggle("fixture/repo-4", starred = true)).assertIsNotEnabled()
         capture("detail-star-toggle--offline")
 
         assertEquals("one DELETE per tap, none while limited or offline", 2, network.calls("DELETE", path).size)

@@ -41,8 +41,8 @@ import java.io.File
 
 /**
  * Both account dialogs as drawn on their boards: the copy, the one-line account rows of the
- * worst case (S5-1), nothing under the system bars or the cutout (AC-40c), and a screenshot named
- * after each board (AC-10, AC-14).
+ * worst case, nothing under the system bars or the cutout, and a screenshot named
+ * after each board.
  */
 class AccountDialogsTest {
 

@@ -70,9 +70,19 @@ interface StarListDao {
     @Insert
     suspend fun insertItems(items: List<StarListItemEntity>)
 
-    /** Replaces every cached list and its items with GitHub's latest answer, all or nothing. */
+    @Query("SELECT * FROM star_list_items")
+    suspend fun getItems(): List<StarListItemEntity>
+
+    /**
+     * Replaces every cached list and its items with GitHub's latest answer, all or nothing. An
+     * answer equal to the cache (fetch times aside) writes nothing, so nothing that reads the
+     * lists reloads.
+     */
     @Transaction
     suspend fun replaceAll(lists: List<StarListEntity>, items: List<StarListItemEntity>) {
+        val unchanged = getLists().map { it.copy(fetchedAt = 0) } == lists.map { it.copy(fetchedAt = 0) } &&
+            getItems().toSet() == items.toSet()
+        if (unchanged) return
         deleteAll()
         insertLists(lists)
         insertItems(items)

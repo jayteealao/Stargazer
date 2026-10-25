@@ -18,10 +18,10 @@ enum class LegacyIdentify {
     /** The old token worked; the account it belongs to is recorded and the token removed. */
     Identified,
 
-    /** The old token was rejected (401); it is removed and the data owner is unknown. */
+    /** GitHub refused the old token for good (401 or another 4xx); it is removed and the data owner is unknown. */
     OwnerUnknown,
 
-    /** GitHub could not be asked (offline, rate limit, server error); the token is kept for later. */
+    /** GitHub could not answer yet (offline, rate limit, server error); the token is kept for later. */
     Unresolved
 }
 
@@ -58,15 +58,23 @@ class LegacyAccountIdentifier(
         } catch (e: CancellationException) {
             throw e
         } catch (e: HttpException) {
-            if (e.code() == 401) {
+            if (isTemporary(e)) {
+                LegacyIdentify.Unresolved
+            } else {
+                // A refusal that will not change (revoked, suspended, gone): asking again cannot help.
                 store.clearOldToken()
                 if (accountDao.get() == null) store.setOwnerUnknown(true)
                 LegacyIdentify.OwnerUnknown
-            } else {
-                LegacyIdentify.Unresolved
             }
         } catch (e: Exception) {
             LegacyIdentify.Unresolved
         }
+    }
+
+    /** Rate limits (429, or 403 with no requests left) and server errors pass; other refusals do not. */
+    private fun isTemporary(e: HttpException): Boolean {
+        val code = e.code()
+        if (code == 429 || code >= 500) return true
+        return code == 403 && e.response()?.headers()?.get("x-ratelimit-remaining") == "0"
     }
 }

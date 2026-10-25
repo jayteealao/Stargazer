@@ -2,9 +2,6 @@ package uk.adedamola.stargazer.data.repository
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import uk.adedamola.stargazer.data.local.database.AccountRecord
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.SyncMetadata
@@ -65,8 +62,7 @@ class StarReconciler(
     constructor(api: GitHubApiService, database: AppDatabase, engine: StarEngine) :
         this(api, database, engine, System::currentTimeMillis)
 
-    private val gate = Mutex()
-    private var running: CompletableDeferred<Outcome>? = null
+    private val singleFlight = SingleFlight<Outcome> { Outcome.Failed(null) }
 
     /** Reads GitHub's whole starred list; any failure on any page writes nothing. */
     suspend fun prepare(): Prepared {
@@ -107,10 +103,7 @@ class StarReconciler(
             return@withTransaction Outcome.AccountChanged
         }
         val removed = removable(prepared)
-        removed.forEach { id ->
-            database.repositoryTagDao().deleteAllTagsForRepository(id)
-            database.repositoryDao().deleteById(id)
-        }
+        removed.forEach { id -> database.removeRepository(id) }
         database.syncMetadataDao().updateMetadata(
             SyncMetadata(dataType = MARKER, lastSyncTimestamp = prepared.account.recordedAt, isInitialSyncComplete = true)
         )
@@ -121,23 +114,12 @@ class StarReconciler(
      * Reads the list, then removes what GitHub no longer lists, or returns [Outcome.NoticeNeeded]
      * when the person must be told first. A call while one runs waits for that one.
      */
-    suspend fun reconcile(): Outcome {
-        val (job, owner) = gate.withLock {
-            running?.let { it to false } ?: CompletableDeferred<Outcome>().also { running = it }.let { it to true }
-        }
-        if (!owner) return job.await()
-        var outcome: Outcome = Outcome.Failed(null)
-        try {
-            outcome = when (val prepared = prepare()) {
-                is Prepared.Failed -> Outcome.Failed(prepared.error)
-                is Prepared.Ready ->
-                    if (noticeDue(prepared)) Outcome.NoticeNeeded(removable(prepared).size, prepared)
-                    else apply(prepared)
-            }
-            return outcome
-        } finally {
-            gate.withLock { running = null }
-            job.complete(outcome)
+    suspend fun reconcile(): Outcome = singleFlight.run {
+        when (val prepared = prepare()) {
+            is Prepared.Failed -> Outcome.Failed(prepared.error)
+            is Prepared.Ready ->
+                if (noticeDue(prepared)) Outcome.NoticeNeeded(removable(prepared).size, prepared)
+                else apply(prepared)
         }
     }
 

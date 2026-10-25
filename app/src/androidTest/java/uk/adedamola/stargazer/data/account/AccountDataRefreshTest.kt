@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit
 /**
  * The profile and the star lists, refreshed from scripted GitHub answers into the cache: every
  * field, list paging, item paging, failures that keep the cache and the profile, the 401 path, the
- * account guard and single flight (AC-24, AC-26, AC-28 data, S6-2, C4).
+ * account guard and single flight.
  */
 @RunWith(AndroidJUnit4::class)
 class AccountDataRefreshTest {

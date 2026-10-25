@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -129,7 +131,7 @@ private fun StarSnackbar(data: SnackbarData) {
                 fontSize = 14.sp,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
-                    .clickable { data.performAction() }
+                    .clickable(role = Role.Button) { data.performAction() }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
             )
         }
@@ -168,7 +170,8 @@ fun StarStatusLine(message: StarMessage, onRetry: (() -> Unit)?, modifier: Modif
                 fontSize = 12.sp,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
-                    .clickable(onClick = onRetry),
+                    .clickable(role = Role.Button, onClick = onRetry)
+                    .semantics { contentDescription = "Retry" },
             )
         }
     }

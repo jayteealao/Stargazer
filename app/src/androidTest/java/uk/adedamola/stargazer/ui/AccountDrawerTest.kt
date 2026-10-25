@@ -25,8 +25,7 @@ import uk.adedamola.stargazer.ui.theme.safeBars
 
 /**
  * The drawer's account header and star lists as drawn on the boards: texts, actions, the
- * truncation of worst-case content, and no touch target under the bars or the cutout
- * (AC-24 header, AC-26 UI, AC-28, AC-39, S6-1, S6-2, AC-40d).
+ * truncation of worst-case content, and no touch target under the bars or the cutout.
  */
 class AccountDrawerTest {
 

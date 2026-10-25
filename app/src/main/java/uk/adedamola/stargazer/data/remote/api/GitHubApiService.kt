@@ -127,6 +127,13 @@ interface GitHubApiService {
         @Path("repo") repo: String
     ): Response<Unit>
 
+    /** One repository as GitHub describes it. */
+    @GET("repos/{owner}/{repo}")
+    suspend fun getRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): GitHubRepository
+
     companion object {
         const val BASE_URL = "https://api.github.com/"
     }

@@ -20,18 +20,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
@@ -49,7 +52,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -98,7 +104,7 @@ fun SignInRoute(
         onSignIn = viewModel::signIn,
         onCopyAndOpen = {
             state.userCode?.let { copyCode(context, it) }
-            if (!openBrowser(context, Uri.parse(state.verificationUri))) viewModel.onBrowserMissing()
+            if (!openBrowser(context, safeVerificationUri(state.verificationUri))) viewModel.onBrowserMissing()
         },
         onCopyCode = { state.userCode?.let { copyCode(context, it) } },
         cursorBlinks = cursorBlinks
@@ -132,16 +138,20 @@ fun SignInScreen(
     cursorBlinks: Boolean = true
 ) {
     val phase = state.phase
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(FactoryDarkGrey)
             .windowInsetsPadding(WindowInsets.safeBars)
     ) {
+        // Fills the window when it fits; scrolls, button included, when large text or a short
+        // landscape window makes it taller.
+        val windowHeight = maxHeight
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = windowHeight)
                 .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .padding(horizontal = 22.dp)
@@ -170,7 +180,7 @@ fun SignInScreen(
                 SignInPhase.Expired -> {
                     UserCode(code = state.userCode.orEmpty(), expired = true)
                     Spacer(modifier = Modifier.height(16.dp))
-                    StatusText("CODE_EXPIRED — this code is older than 15 minutes.", FactoryYellow)
+                    StatusText("CODE_EXPIRED — this code is older than 15 minutes.", FactoryYellow, announce = true)
                 }
                 SignInPhase.Denied -> ErrorLines(
                     "ACCESS_DENIED — GitHub reports that the request was cancelled.",
@@ -186,9 +196,11 @@ fun SignInScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     HintLine("no browser found on this phone · ${formatLeft(state.secondsLeft)} left")
                     Spacer(modifier = Modifier.height(20.dp))
-                    StatusText("On any device, open", FactoryTextWhite)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    StatusText(state.verificationUri.removePrefix("https://"), FactoryCyan)
+                    Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+                        StatusText("On any device, open", FactoryTextWhite)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        StatusText(safeVerificationUri(state.verificationUri).toString().removePrefix("https://"), FactoryCyan)
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     HintLine("and enter the code above.")
                 }
@@ -229,7 +241,8 @@ private fun PromptLine(cursor: Cursor, blinks: Boolean) {
             },
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp,
-            color = FactoryTextWhite
+            color = FactoryTextWhite,
+            modifier = Modifier.semantics { heading() }
         )
         if (cursor != Cursor.None) {
             Spacer(modifier = Modifier.size(width = 4.dp, height = 1.dp))
@@ -280,6 +293,8 @@ private fun UserCode(code: String, expired: Boolean = false) {
         autoSize = TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 48.sp, stepSize = 2.sp),
         modifier = Modifier.semantics {
             contentDescription = (if (expired) "expired code " else "code ") + code.toList().joinToString(" ")
+            // Read out when a new code appears; the countdown below stays silent.
+            liveRegion = LiveRegionMode.Polite
         }
     )
 }
@@ -296,8 +311,15 @@ private fun HintLine(text: String) {
 }
 
 @Composable
-private fun StatusText(text: String, color: Color) {
-    Text(text = text, fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 21.sp, color = color)
+private fun StatusText(text: String, color: Color, announce: Boolean = false) {
+    Text(
+        text = text,
+        fontFamily = FontFamily.Monospace,
+        fontSize = 14.sp,
+        lineHeight = 21.sp,
+        color = color,
+        modifier = if (announce) Modifier.semantics { liveRegion = LiveRegionMode.Assertive } else Modifier
+    )
 }
 
 @Composable
@@ -335,18 +357,21 @@ private fun RequestingBody() {
 /** A yellow SCREAMING_SNAKE status with its icon, then plain words in grey. */
 @Composable
 private fun ErrorLines(status: String, detail: String?) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(
-            imageVector = Icons.Outlined.ErrorOutline,
-            contentDescription = null,
-            tint = FactoryYellow,
-            modifier = Modifier.padding(top = 2.dp).size(18.dp)
-        )
-        StatusText(status, FactoryYellow)
-    }
-    if (detail != null) {
-        Spacer(modifier = Modifier.height(10.dp))
-        HintLine(detail)
+    // One node, read out as soon as it appears: focus stays on the button below.
+    Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Assertive }) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(
+                imageVector = Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                tint = FactoryYellow,
+                modifier = Modifier.padding(top = 2.dp).size(18.dp)
+            )
+            StatusText(status, FactoryYellow)
+        }
+        if (detail != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            HintLine(detail)
+        }
     }
 }
 
@@ -399,6 +424,15 @@ private fun copyCode(context: Context, code: String) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
         Toast.makeText(context, "Code copied", Toast.LENGTH_SHORT).show()
     }
+}
+
+/**
+ * The code page GitHub named, when it is an https page on github.com; GitHub's own code page
+ * otherwise, so a changed answer can never send the person elsewhere.
+ */
+internal fun safeVerificationUri(raw: String): Uri {
+    val uri = Uri.parse(raw)
+    return if (uri.scheme == "https" && uri.host == "github.com") uri else Uri.parse(DEVICE_VERIFICATION_URI)
 }
 
 /**

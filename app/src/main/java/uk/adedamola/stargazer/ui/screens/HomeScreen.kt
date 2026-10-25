@@ -57,6 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -86,6 +88,7 @@ import uk.adedamola.stargazer.ui.components.undoVisuals
 import uk.adedamola.stargazer.ui.components.TagAssignmentSheet
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
+import uk.adedamola.stargazer.ui.theme.FactoryYellow
 import uk.adedamola.stargazer.ui.theme.PrimaryContainer
 import uk.adedamola.stargazer.ui.theme.safeBars
 
@@ -283,11 +286,13 @@ fun HomeScreen(
                     Text(
                         text = GitHubErrorText.describe(failedRefresh.error),
                         fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.error,
+                        // Warnings are yellow across the app.
+                        color = FactoryYellow,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite }
                     )
                 }
 

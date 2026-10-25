@@ -36,7 +36,7 @@ import uk.adedamola.stargazer.ui.screens.SignInViewModel
 
 /**
  * An approved sign-in that needs an answer: Cancel returns to the sign-in screen with the data
- * kept (AC-11); Continue, Keep and Remove open Home (AC-10, AC-14).
+ * kept; Continue, Keep and Remove open Home.
  */
 @RunWith(AndroidJUnit4::class)
 class AccountDecisionRouteTest {

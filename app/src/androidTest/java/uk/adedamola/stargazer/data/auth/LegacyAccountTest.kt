@@ -15,8 +15,8 @@ import java.io.IOException
 
 /**
  * The update from the pasted-token version: a working old token identifies the account once and
- * is removed (AC-13); a rejected one leaves the owner unknown and the first sign-in asks Keep or
- * Remove (AC-14). Without an answer from GitHub the old token is kept and nothing is guessed.
+ * is removed; a rejected one leaves the owner unknown and the first sign-in asks Keep or
+ * Remove. Without an answer from GitHub the old token is kept and nothing is guessed.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyAccountTest {

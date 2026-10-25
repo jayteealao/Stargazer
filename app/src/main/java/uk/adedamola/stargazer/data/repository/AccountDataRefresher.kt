@@ -2,12 +2,9 @@ package uk.adedamola.stargazer.data.repository
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.GitHubProfileEntity
 import uk.adedamola.stargazer.data.local.database.StarListEntity
@@ -56,22 +53,12 @@ class AccountDataRefresher(
     private val _listsStatus = MutableStateFlow<RefreshStatus>(RefreshStatus.Idle)
     val listsStatus: StateFlow<RefreshStatus> = _listsStatus.asStateFlow()
 
-    private val gate = Mutex()
-    private var running: CompletableDeferred<Unit>? = null
+    private val singleFlight = SingleFlight { }
 
     /** Refreshes the profile, then the lists. A call while one runs waits for that one. */
-    suspend fun refresh() {
-        val (job, owner) = gate.withLock {
-            running?.let { it to false } ?: CompletableDeferred<Unit>().also { running = it }.let { it to true }
-        }
-        if (!owner) return job.await()
-        try {
-            refreshProfile()
-            refreshLists()
-        } finally {
-            gate.withLock { running = null }
-            job.complete(Unit)
-        }
+    suspend fun refresh() = singleFlight.run {
+        refreshProfile()
+        refreshLists()
     }
 
     suspend fun refreshProfile() {

@@ -19,9 +19,9 @@ import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
 import uk.adedamola.stargazer.data.paging.SyncProgress
 
 /**
- * Two fake GitHub accounts: the same numeric user id keeps every table (AC-9, also after a
- * rename); a different id asks first, Continue empties the wipe set in one transaction (AC-10),
- * Cancel keeps everything (AC-11).
+ * Two fake GitHub accounts: the same numeric user id keeps every table (also after a
+ * rename); a different id asks first, Continue empties the wipe set in one transaction,
+ * Cancel keeps everything.
  */
 @OptIn(ExperimentalPagingApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -106,6 +106,51 @@ class AccountChangeTest {
         assertEquals(before, localCounts(db))
         assertEquals(FIXTURE_USER_ID, db.accountDao().get()!!.userId)
         assertTrue("key hidden", !outcome.pending.toString().contains(key))
+    }
+
+    /** An earlier version signed out before the update: data on the phone, no account recorded. */
+    @Test
+    fun dataWithNoRecordedAccountAsksKeepOrRemoveAndStoresNoKey() = runBlocking<Unit> {
+        db.accountDao().deleteAll()
+        user = userJson(SECOND_USER_ID, "second-login")
+        val before = localCounts(db)
+
+        val ask = newCompleter().complete(key).getOrThrow() as SignInOutcome.KeepData
+
+        assertEquals(LocalDataCounts(repos = 3, tags = 1, presets = 1), ask.counts)
+        assertEquals(before, localCounts(db))
+        assertNull("no account recorded before the answer", db.accountDao().get())
+        assertNull("no key stored before the answer", keys.tokenManager.currentKey())
+    }
+
+    /** A first sign-in on an empty phone asks nothing. */
+    @Test
+    fun emptyPhoneWithNoRecordedAccountSignsInWithNoQuestion() = runBlocking<Unit> {
+        WIPE_TABLES.forEach { table -> db.openHelper.writableDatabase.execSQL("DELETE FROM $table") }
+        db.accountDao().deleteAll()
+
+        val outcome = newCompleter().complete(key).getOrThrow()
+
+        assertEquals(SignInOutcome.Done, outcome)
+        assertEquals(FIXTURE_USER_ID, db.accountDao().get()!!.userId)
+        assertEquals(key, keys.tokenManager.currentKey())
+    }
+
+    @Test
+    fun everyTableIsClearedByTheWipeOrLeftOutOnPurpose() {
+        val tables = db.openHelper.readableDatabase.query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' " +
+                "AND name NOT LIKE 'sqlite_%' AND name NOT IN ('room_master_table', 'android_metadata')"
+        ).use { c -> buildSet { while (c.moveToNext()) add(c.getString(0)) } }
+        // The account row is replaced by the wipe, not cleared; the template table holds no account data.
+        val leftOutOnPurpose = setOf("account", "Stargazer")
+        assertEquals(
+            "a new table must be added to the account wipe and to WIPE_TABLES, or left out here on purpose",
+            WIPE_TABLES.toSet(),
+            tables - leftOutOnPurpose
+        )
+        val seeded = localCounts(db)
+        WIPE_TABLES.forEach { table -> assertTrue("$table is seeded, so the wipe test proves it empties", seeded[table]!! > 0) }
     }
 
     @Test

@@ -1,5 +1,8 @@
 package uk.adedamola.stargazer.data.star
 
+import uk.adedamola.stargazer.data.repository.AccountRepository
+import uk.adedamola.stargazer.ui.screens.HomeGitHubSearch
+import uk.adedamola.stargazer.ui.screens.HomeRemovals
 import android.os.Debug
 import android.os.Process
 import android.os.SystemClock
@@ -168,14 +171,12 @@ class ReconcileBenchmarkTest {
                 gitHubRepository = GitHubRepositoryImpl(db.repositoryDao(), mediator, api),
                 organizationRepository = OrganizationRepository(db.repositoryDao(), db.tagDao(), db.repositoryTagDao(), db.searchPresetDao()),
                 accessSession = AccessSession(keys.tokenManager),
-                accountDao = db.accountDao(),
+                accounts = AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()),
                 starListRepository = StarListRepository(db.starListDao()),
                 refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L },
-                profileDao = db.gitHubProfileDao(),
                 starEngine = engine,
-                gitHubSearch = GitHubSearch(api, db.repositoryDao()),
-                connectivity = connectivity,
-                reconciler = StarReconciler(api, db, engine),
+                searchFactory = HomeGitHubSearch.Factory(GitHubSearch(api, db.repositoryDao()), connectivity, engine),
+                removalsFactory = HomeRemovals.Factory(StarReconciler(api, db, engine)),
             )
         }
         val differ = AsyncPagingDataDiffer(

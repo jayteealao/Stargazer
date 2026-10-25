@@ -1,7 +1,7 @@
 package uk.adedamola.stargazer.ui.components
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
@@ -28,7 +28,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -84,16 +83,18 @@ fun GitHubStarToggle(
     Row(
         modifier = modifier
             .minimumInteractiveComponentSize()
+            // A switch named after its visible word: "Star owner/repo", on or off. Only the
+            // in-flight state needs words of its own.
             .semantics(mergeDescendants = true) {
-                role = Role.Button
-                contentDescription = if (state.starred) "Unstar $fullName" else "Star $fullName"
-                stateDescription = when {
-                    state.inFlight -> "Saving"
-                    state.starred -> "Starred"
-                    else -> "Not starred"
-                }
+                contentDescription = "Star $fullName"
+                if (state.inFlight) stateDescription = "Saving"
             }
-            .clickable(enabled = state.enabled && !state.inFlight, onClick = onClick)
+            .toggleable(
+                value = state.starred,
+                enabled = state.enabled && !state.inFlight,
+                role = Role.Switch,
+                onValueChange = { onClick() }
+            )
             .height(40.dp)
             .then(
                 if (state.inFlight) {

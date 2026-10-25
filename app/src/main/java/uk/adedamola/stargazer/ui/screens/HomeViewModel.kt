@@ -20,11 +20,9 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
@@ -32,21 +30,14 @@ import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.auth.AccessSession
 import uk.adedamola.stargazer.data.auth.AccountSummary
-import uk.adedamola.stargazer.data.local.database.AccountDao
-import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
 import uk.adedamola.stargazer.data.local.database.StarListEntity
-import uk.adedamola.stargazer.data.remote.Connectivity
-import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.data.repository.AccountDataRefresher
+import uk.adedamola.stargazer.data.repository.AccountRepository
 import uk.adedamola.stargazer.data.repository.Attempt
-import uk.adedamola.stargazer.data.repository.GitHubSearch
 import uk.adedamola.stargazer.data.repository.RepoRef
 import uk.adedamola.stargazer.data.repository.StarControlState
 import uk.adedamola.stargazer.data.repository.StarEngine
 import uk.adedamola.stargazer.data.repository.StarMessage
-import uk.adedamola.stargazer.data.repository.Outcome
-import uk.adedamola.stargazer.data.repository.Prepared
-import uk.adedamola.stargazer.data.repository.StarReconciler
 import uk.adedamola.stargazer.data.repository.UndoOffer
 import uk.adedamola.stargazer.data.repository.RefreshStatus
 import uk.adedamola.stargazer.data.repository.StarListRepository
@@ -73,15 +64,6 @@ private data class FilterState(
     val listId: String?
 )
 
-/** GitHub-wide results for the search query, shown under `ON_GITHUB`. */
-sealed interface GitHubSearchState {
-    data object Idle : GitHubSearchState
-    data object Loading : GitHubSearchState
-    data class Loaded(val total: Int, val items: List<GitHubRepository>) : GitHubSearchState
-    data object Offline : GitHubSearchState
-    data class Failed(val text: String) : GitHubSearchState
-}
-
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -89,22 +71,17 @@ class HomeViewModel @Inject constructor(
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository,
     private val accessSession: AccessSession,
-    accountDao: AccountDao,
+    accounts: AccountRepository,
     private val starListRepository: StarListRepository,
     private val refresher: AccountDataRefresher,
-    profileDao: GitHubProfileDao,
     private val starEngine: StarEngine,
-    private val gitHubSearch: GitHubSearch,
-    private val connectivity: Connectivity,
-    private val reconciler: StarReconciler
+    searchFactory: HomeGitHubSearch.Factory,
+    removalsFactory: HomeRemovals.Factory,
 ) : ViewModel() {
 
     companion object {
         private const val SEARCH_QUERY_KEY = "search_query"
         private const val SEARCH_DEBOUNCE_MS = 300L
-        /** GitHub search spends rate-limit points: wait longer, and only for 2+ characters. */
-        const val GITHUB_SEARCH_DEBOUNCE_MS = 600L
-        const val GITHUB_SEARCH_MIN_LENGTH = 2
     }
 
     // Raw search query input (immediate updates for UI)
@@ -154,14 +131,8 @@ class HomeViewModel @Inject constructor(
      * The signed-in account for the drawer header: the cached profile, else the account record
      * (login and avatar), so the header shows right after sign-in.
      */
-    val account: StateFlow<AccountSummary?> = combine(profileDao.observe(), accountDao.observe()) { profile, record ->
-        when {
-            record == null -> null
-            profile != null && profile.userId == record.userId ->
-                AccountSummary(profile.userId, profile.login, profile.name, profile.avatarUrl)
-            else -> AccountSummary(record.userId, record.login, null, record.avatarUrl)
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val account: StateFlow<AccountSummary?> = accounts.observeAccount()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _minStars = MutableStateFlow<Int?>(null)
     val minStars: StateFlow<Int?> = _minStars.asStateFlow()
@@ -254,38 +225,13 @@ class HomeViewModel @Inject constructor(
         // GitHub confirms and the Undo window ends.
         .combine(starEngine.hiddenIds) { data, hidden -> data.filter { it.id !in hidden } }
 
-    /** GitHub-wide search for the query: debounced, 2+ characters, online only, latest wins. */
-    val gitHubSearchState: StateFlow<GitHubSearchState> = _rawSearchQuery
-        .debounce(GITHUB_SEARCH_DEBOUNCE_MS)
-        .map { it.trim() }
-        .distinctUntilChanged()
-        .transformLatest { query ->
-            when {
-                query.length < GITHUB_SEARCH_MIN_LENGTH -> emit(GitHubSearchState.Idle)
-                !connectivity.isOnline() -> emit(GitHubSearchState.Offline)
-                else -> {
-                    emit(GitHubSearchState.Loading)
-                    val result = runCatching { gitHubSearch.search(query) }
-                    result.exceptionOrNull()?.let { if (it is kotlinx.coroutines.CancellationException) throw it }
-                    emit(
-                        result.fold(
-                            onSuccess = { GitHubSearchState.Loaded(it.total, it.items) },
-                            onFailure = { GitHubSearchState.Failed(GitHubErrorText.describe(it)) }
-                        )
-                    )
-                }
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, GitHubSearchState.Idle)
+    private val search = searchFactory.create(_rawSearchQuery, viewModelScope)
+
+    /** GitHub-wide search for the query, under the local matches. */
+    val gitHubSearchState: StateFlow<GitHubSearchState> = search.state
 
     /** The star control of each GitHub result on screen. */
-    val searchControlStates: StateFlow<Map<Int, StarControlState>> = gitHubSearchState
-        .flatMapLatest { state ->
-            val items = (state as? GitHubSearchState.Loaded)?.items.orEmpty()
-            if (items.isEmpty()) flowOf(emptyMap())
-            else combine(items.map { repo -> starEngine.controlState(repo.id).map { repo.id to it } }) { it.toMap() }
-        }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    val searchControlStates: StateFlow<Map<Int, StarControlState>> = search.controlStates
 
     /** The latest unstar's Undo offer. */
     val undoOffer: StateFlow<UndoOffer?> = starEngine.undoOffer
@@ -303,8 +249,7 @@ class HomeViewModel @Inject constructor(
     fun toggleSearchStar(repo: GitHubRepository) {
         viewModelScope.launch {
             val ref = RepoRef(repo.id, repo.owner.login, repo.name)
-            val starred = searchControlStates.value[repo.id]?.starred == true
-            reportRefusal(if (starred) starEngine.unstar(ref) else starEngine.star(ref, repo))
+            reportRefusal(if (search.isStarred(repo.id)) starEngine.unstar(ref) else starEngine.star(ref, repo))
         }
     }
 
@@ -317,10 +262,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             when (message) {
                 is StarMessage.UnstarFailed -> reportRefusal(starEngine.unstar(message.ref))
-                is StarMessage.StarFailed -> {
-                    val repo = (gitHubSearchState.value as? GitHubSearchState.Loaded)?.items?.find { it.id == message.ref.id }
-                    reportRefusal(starEngine.star(message.ref, repo))
-                }
+                // When the result has left the screen, the engine reads the repository from GitHub.
+                is StarMessage.StarFailed -> reportRefusal(starEngine.star(message.ref, search.resultFor(message.ref.id)))
                 else -> Unit
             }
         }
@@ -334,18 +277,13 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private val _reconciling = MutableStateFlow(false)
+    private val removals = removalsFactory.create(viewModelScope)
 
     /** True while a pull-to-refresh reads GitHub's whole starred list. */
-    val reconciling: StateFlow<Boolean> = _reconciling.asStateFlow()
-
-    private val _removalNotice = MutableStateFlow<Int?>(null)
+    val reconciling: StateFlow<Boolean> = removals.reconciling
 
     /** How many repos the first reconcile after a sign-in would remove; null when nothing waits. */
-    val removalNotice: StateFlow<Int?> = _removalNotice.asStateFlow()
-
-    /** The read the removal notice is about, removed on Continue. */
-    private var heldRemoval: Prepared.Ready? = null
+    val removalNotice: StateFlow<Int?> = removals.notice
 
     fun refresh() {
         // Trigger refresh by clearing and reloading the paging data
@@ -354,44 +292,12 @@ class HomeViewModel @Inject constructor(
         }
         refreshAccountData()
         resumePendingUnstars()
-        reconcile()
-    }
-
-    /**
-     * Removes the repos GitHub no longer lists as starred (pull-to-refresh only; app start and
-     * background sync never remove). A failed read removes nothing and says nothing: the paging
-     * refresh shows its own error, and the next pull tries again.
-     */
-    private fun reconcile() {
-        if (_removalNotice.value != null) return
-        _reconciling.value = true
-        viewModelScope.launch {
-            try {
-                val outcome = reconciler.reconcile()
-                if (outcome is Outcome.NoticeNeeded) {
-                    heldRemoval = outcome.prepared
-                    _removalNotice.value = outcome.count
-                }
-            } finally {
-                _reconciling.value = false
-            }
-        }
+        // Pull-to-refresh only: app start and background sync never remove.
+        removals.reconcile()
     }
 
     /** Continue on the removal notice: the repos it counted leave, with their local data. */
-    fun confirmRemoval() {
-        val held = heldRemoval ?: return
-        heldRemoval = null
-        _removalNotice.value = null
-        _reconciling.value = true
-        viewModelScope.launch {
-            try {
-                reconciler.apply(held)
-            } finally {
-                _reconciling.value = false
-            }
-        }
-    }
+    fun confirmRemoval() = removals.confirm()
 
     /** Settles unstars left open by a process that was killed during the Undo window. */
     private fun resumePendingUnstars() {
@@ -518,10 +424,8 @@ class HomeViewModel @Inject constructor(
         // This view model outlives a sign-out. When another account's data replaces the old one,
         // a selected tag, preset or language of the old account must not filter the new list.
         viewModelScope.launch {
-            accountDao.observe().map { it?.userId }.distinctUntilChanged().drop(1).collect {
-                // A notice about the old account's repos no longer applies.
-                heldRemoval = null
-                _removalNotice.value = null
+            accounts.observeUserId().drop(1).collect {
+                removals.drop()
                 clearAllFilters()
                 refreshAccountData()
             }

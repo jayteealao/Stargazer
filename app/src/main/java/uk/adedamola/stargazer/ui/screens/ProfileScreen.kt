@@ -49,7 +49,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -231,10 +234,12 @@ private fun androidx.compose.foundation.layout.RowScope.ProfileStat(value: Int, 
             text = formatCompact(value),
             style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 18.sp, fontFeatureSettings = "tnum"),
             color = FactoryTextWhite,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Spacer(Modifier.height(4.dp))
-        Text(text = label, fontFamily = FontFamily.Monospace, fontSize = 11.sp, letterSpacing = 0.5.sp, color = FactoryTextGrey, maxLines = 1)
+        // One line at the default text size; a label wraps rather than clips at large sizes.
+        Text(text = label, fontFamily = FontFamily.Monospace, fontSize = 11.sp, letterSpacing = 0.5.sp, color = FactoryTextGrey, maxLines = 2)
     }
 }
 
@@ -271,7 +276,14 @@ private fun ProfileFact(
 @Composable
 private fun ProfileSkeleton() {
     val block = Color.White.copy(alpha = 0.06f)
-    Column(Modifier.testTag("profile-loading")) {
+    Column(
+        Modifier
+            .testTag("profile-loading")
+            .semantics {
+                contentDescription = "Loading profile"
+                liveRegion = LiveRegionMode.Polite
+            }
+    ) {
         Box(Modifier.size(88.dp).background(block, CircleShape))
         Spacer(Modifier.height(20.dp))
         Box(Modifier.width(200.dp).height(24.dp).background(block))
@@ -291,7 +303,7 @@ private fun ProfileError() {
             .border(1.dp, FactoryYellow)
             .background(FactoryWarnContainer)
             .padding(horizontal = 14.dp, vertical = 12.dp)
-            .semantics(mergeDescendants = true) {},
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(

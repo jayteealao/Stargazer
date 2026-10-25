@@ -1,5 +1,8 @@
 package uk.adedamola.stargazer.data.account
 
+import uk.adedamola.stargazer.data.repository.AccountRepository
+import uk.adedamola.stargazer.ui.screens.HomeGitHubSearch
+import uk.adedamola.stargazer.ui.screens.HomeRemovals
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.AsyncPagingDataDiffer
 import androidx.paging.ExperimentalPagingApi
@@ -51,7 +54,7 @@ import uk.adedamola.stargazer.ui.screens.HomeViewModel
 
 /**
  * A selected star list filters Home to its repos on this phone, and clearing the filter shows
- * every starred repo again (AC-27). A list entry that is not starred here is never added.
+ * every starred repo again. A list entry that is not starred here is never added.
  */
 @RunWith(AndroidJUnit4::class)
 class StarListFilterTest {
@@ -116,14 +119,12 @@ class StarListFilterTest {
                 gitHubRepository = GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api),
                 organizationRepository = OrganizationRepository(db.repositoryDao(), db.tagDao(), db.repositoryTagDao(), db.searchPresetDao()),
                 accessSession = AccessSession(keys.tokenManager),
-                accountDao = db.accountDao(),
+                accounts = AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()),
                 starListRepository = StarListRepository(db.starListDao()),
                 refresher = refresher,
-                profileDao = db.gitHubProfileDao(),
                 starEngine = engine,
-                gitHubSearch = GitHubSearch(api, db.repositoryDao()),
-                connectivity = connectivity,
-                reconciler = StarReconciler(api, db, engine),
+                searchFactory = HomeGitHubSearch.Factory(GitHubSearch(api, db.repositoryDao()), connectivity, engine),
+                removalsFactory = HomeRemovals.Factory(StarReconciler(api, db, engine)),
             )
         }
         val differ = AsyncPagingDataDiffer(

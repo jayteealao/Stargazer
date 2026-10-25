@@ -25,7 +25,7 @@ import java.io.File
 
 /**
  * Each sign-in state as drawn on the boards: its texts, nothing under the system bars or the
- * cutout, and a screenshot named after its board (AC-6 screens, S4-1, AC-40b).
+ * cutout, and a screenshot named after its board.
  */
 class SignInScreenStatesTest {
 

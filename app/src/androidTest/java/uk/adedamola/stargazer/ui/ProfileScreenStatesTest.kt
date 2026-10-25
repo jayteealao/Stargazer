@@ -18,8 +18,7 @@ import uk.adedamola.stargazer.ui.screens.ProfileUiState
 
 /**
  * Each profile state as drawn on the boards: every field, the offline line, loading and error,
- * worst-case wrapping and truncation, and no touch target under the bars or the cutout
- * (AC-24 screen, AC-25 screen, S6-1, AC-40d).
+ * worst-case wrapping and truncation, and no touch target under the bars or the cutout.
  */
 class ProfileScreenStatesTest {
 

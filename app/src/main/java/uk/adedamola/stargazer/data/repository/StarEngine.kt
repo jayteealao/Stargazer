@@ -85,8 +85,9 @@ data class StarControlState(
  *
  * One request at a time per repository; offline and rate-limited taps send nothing. A 401 goes
  * through the app's access-ended path on the HTTP client. Nothing here logs a key or a body.
+ *
+ * Built for the app by `StarModule`, with the real clock and the app-wide star scope.
  */
-/** Built for the app by `StarModule`, with the real clock and the app-wide star scope. */
 class StarEngine(
     private val api: GitHubApiService,
     private val database: AppDatabase,
@@ -146,7 +147,7 @@ class StarEngine(
         )
     }.distinctUntilChanged()
 
-    /** Unstars [ref]: the DELETE goes out now and the repository leaves Home now (AC-29). */
+    /** Unstars [ref]: the DELETE goes out now and the repository leaves Home now. */
     suspend fun unstar(ref: RepoRef): Attempt {
         refusal(ref.id)?.let { return it }
         touch(ref.id)
@@ -187,7 +188,7 @@ class StarEngine(
     }
 
     /**
-     * Undoes the unstar of [repoId]: a PUT, after any DELETE still running for it (AC-30). When
+     * Undoes the unstar of [repoId]: a PUT, after any DELETE still running for it. When
      * the DELETE already failed, the repository is back and nothing is sent.
      */
     suspend fun undo(repoId: Int): Attempt {
@@ -216,7 +217,7 @@ class StarEngine(
     }
 
     /**
-     * Stars [ref] (AC-34). [repo] is GitHub's description of it, stored so that the repository
+     * Stars [ref]. [repo] is GitHub's description of it, stored so that the repository
      * enters the starred list. A repository whose unstar is pending is restored as by Undo.
      */
     suspend fun star(ref: RepoRef, repo: GitHubRepository?): Attempt {
@@ -230,8 +231,12 @@ class StarEngine(
             try {
                 val answer = send(ref.id) { api.starRepository(ref.owner, ref.name) }
                 if (answer.isSuccess && answer.getOrThrow().isSuccessful) {
-                    // Keeps any favorite or pin a row of this repository already has.
-                    repo?.let { repositoryDao.upsertRepositories(listOf(it.toEntity(starredAt = clock()))) }
+                    // Keeps any favorite or pin a row of this repository already has. The phone's
+                    // time only orders the row until the next sync stores GitHub's time; the sync
+                    // cutoff never reads it.
+                    (repo ?: fetchRepository(ref))?.let {
+                        repositoryDao.upsertRepositories(listOf(it.toEntity(starredAt = clock())))
+                    }
                 } else {
                     report(failureOf(answer, ref) { StarMessage.StarFailed(it) })
                 }
@@ -244,7 +249,7 @@ class StarEngine(
 
     /**
      * Settles every pending unstar that no running request or window in this process owns, by
-     * asking GitHub whether the repository is still starred (AC-32): starred means the DELETE
+     * asking GitHub whether the repository is still starred: starred means the DELETE
      * never landed, so the repository comes back; not starred finishes the unstar. No answer
      * keeps the record for the next call.
      */
@@ -271,11 +276,19 @@ class StarEngine(
     private suspend fun finishLocked(repoId: Int) {
         windowJobs.remove(repoId)
         database.withTransaction {
-            database.repositoryTagDao().deleteAllTagsForRepository(repoId)
-            repositoryDao.deleteById(repoId)
+            database.removeRepository(repoId)
             pendingDao.delete(repoId)
         }
         clearOffer(repoId)
+    }
+
+    /** GitHub's description of [ref], or null when it cannot be read now (the next sync adds it). */
+    private suspend fun fetchRepository(ref: RepoRef): GitHubRepository? = try {
+        api.getRepository(ref.owner, ref.name)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 
     private suspend fun send(repoId: Int, call: suspend () -> Response<Unit>): kotlin.Result<Response<Unit>> {

@@ -44,7 +44,7 @@ import uk.adedamola.stargazer.ui.screens.SignInViewModel
 import uk.adedamola.stargazer.ui.theme.StargazerTheme
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** The sign-in screen with its view model, clipboard and browser (AC-2, AC-3, AC-6, S4-1). */
+/** The sign-in screen with its view model, clipboard and browser. */
 class SignInRouteTest {
 
     @get:Rule

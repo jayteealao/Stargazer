@@ -1,5 +1,8 @@
 package uk.adedamola.stargazer.ui
 
+import uk.adedamola.stargazer.data.repository.AccountRepository
+import uk.adedamola.stargazer.ui.screens.HomeGitHubSearch
+import uk.adedamola.stargazer.ui.screens.HomeRemovals
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
@@ -121,14 +124,12 @@ class RemovalNoticeAppTest {
             gitHubRepository = GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api),
             organizationRepository = OrganizationRepository(db.repositoryDao(), db.tagDao(), db.repositoryTagDao(), db.searchPresetDao()),
             accessSession = AccessSession(keys.tokenManager),
-            accountDao = db.accountDao(),
+            accounts = AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()),
             starListRepository = StarListRepository(db.starListDao()),
             refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L },
-            profileDao = db.gitHubProfileDao(),
             starEngine = engine,
-            gitHubSearch = GitHubSearch(api, db.repositoryDao()),
-            connectivity = connectivity,
-            reconciler = StarReconciler(api, db, engine),
+            searchFactory = HomeGitHubSearch.Factory(GitHubSearch(api, db.repositoryDao()), connectivity, engine),
+            removalsFactory = HomeRemovals.Factory(StarReconciler(api, db, engine)),
         )
         check.render {
             SharedTransitionLayout {

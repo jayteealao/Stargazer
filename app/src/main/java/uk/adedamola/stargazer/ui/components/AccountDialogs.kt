@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -201,7 +202,8 @@ fun AccountRow(summary: AccountSummary, modifier: Modifier = Modifier) {
 fun AccountAvatar(summary: AccountSummary, modifier: Modifier = Modifier, size: Dp = 32.dp) {
     val tint = if (summary.name == null) NoNameTint else AvatarTints[Math.floorMod(summary.userId, AvatarTints.size.toLong()).toInt()]
     Box(
-        modifier = modifier.size(size).clip(CircleShape).background(tint),
+        // Decorative: the name or login beside it says who it is.
+        modifier = modifier.size(size).clip(CircleShape).background(tint).clearAndSetSemantics { },
         contentAlignment = Alignment.Center
     ) {
         Text(

@@ -17,7 +17,7 @@ import retrofit2.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-/** GitHub's device-code answers, each on a virtual clock (AC-4, AC-6, offline and GitHub errors). */
+/** GitHub's device-code answers, each on a virtual clock (polling interval, expiry, denial, offline and GitHub errors). */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class DeviceFlowSignInTest {

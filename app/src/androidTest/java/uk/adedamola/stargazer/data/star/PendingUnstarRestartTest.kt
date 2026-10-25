@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit
 /**
  * The app process dies during an unstar's Undo window. On the next start the pending record is
  * settled against GitHub: still starred brings the repo back with everything, not starred
- * finishes the unstar, no answer keeps it for the next try (AC-32).
+ * finishes the unstar, no answer keeps it for the next try.
  */
 @RunWith(AndroidJUnit4::class)
 class PendingUnstarRestartTest {

@@ -42,7 +42,7 @@ sealed interface SignInOutcome {
         val pending: PendingSignIn
     ) : SignInOutcome
 
-    /** The earlier version's token no longer worked, so nobody knows whose data is on the phone. */
+    /** Nobody knows whose data is on the phone (the earlier version's token no longer worked, or no account was recorded). */
     data class KeepData(
         val new: AccountSummary,
         val counts: LocalDataCounts,
@@ -55,9 +55,11 @@ sealed interface SignInOutcome {
  * compares its numeric user id with the account recorded on this phone (logins can be renamed, so
  * they are never compared).
  *
- * - No recorded account, or the same user id: the account is recorded and the key stored.
+ * - No recorded account and nothing stored, or the same user id: the account is recorded and the
+ *   key stored.
  * - A different user id: [SignInOutcome.AccountChange]; nothing is stored until the person answers.
- * - The data owner is unknown (dead token from the earlier version): [SignInOutcome.KeepData].
+ * - The data owner is unknown (a dead token from the earlier version, or local data with no recorded
+ *   account): [SignInOutcome.KeepData].
  *
  * Cancel needs no call here: the pending key was never stored, so the caller drops the
  * [PendingSignIn] and every table and the recorded account stay as they were.
@@ -102,14 +104,13 @@ class SignInCompleter(
         }
         val pending = PendingSignIn(key, user)
         val recorded = accountDao.get()
+        // No record but data on the phone: an earlier version that was signed out before the
+        // update left it, and nobody knows whose it is.
+        val unknownOwner = legacyStore.ownerUnknown() || (recorded == null && localCounts().isNotEmpty())
         when {
-            legacyStore.ownerUnknown() -> SignInOutcome.KeepData(
+            unknownOwner -> SignInOutcome.KeepData(
                 new = user.summary(),
-                counts = LocalDataCounts(
-                    repos = repositoryDao.getRepositoryCount(),
-                    tags = tagDao.count(),
-                    presets = presetDao.count()
-                ),
+                counts = localCounts(),
                 pending = pending
             )
             recorded == null || recorded.userId == user.id -> {
@@ -148,6 +149,14 @@ class SignInCompleter(
         legacyStore.setOwnerUnknown(false)
         tokenManager.saveToken(pending.key)
     }
+
+    private suspend fun localCounts() = LocalDataCounts(
+        repos = repositoryDao.getRepositoryCount(),
+        tags = tagDao.count(),
+        presets = presetDao.count()
+    )
+
+    private fun LocalDataCounts.isNotEmpty() = repos > 0 || tags > 0 || presets > 0
 
     private fun GitHubUser.record() =
         AccountRecord(userId = id, login = login, avatarUrl = avatarUrl, recordedAt = clock())

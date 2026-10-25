@@ -28,7 +28,7 @@ import uk.adedamola.stargazer.data.local.database.AppDatabase
 import javax.inject.Inject
 
 /**
- * The backup-and-restore check on an emulator (AC-17), in two halves around `bmgr backupnow`,
+ * The backup-and-restore check on an emulator, in two halves around `bmgr backupnow`,
  * an uninstall and a reinstall. Each half runs only with its argument; a normal run skips both.
  *
  * - `-e restoreSeed true`: records the fixture account, seeds favorites, pins, a tag with an

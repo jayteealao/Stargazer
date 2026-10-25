@@ -6,14 +6,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import uk.adedamola.stargazer.data.local.database.AccountDao
-import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
 import uk.adedamola.stargazer.data.local.database.GitHubProfileEntity
-import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.repository.AccountDataRefresher
+import uk.adedamola.stargazer.data.repository.AccountRepository
 import uk.adedamola.stargazer.data.repository.RefreshStatus
 import javax.inject.Inject
 
@@ -38,19 +35,15 @@ sealed interface ProfileUiState {
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val profileDao: GitHubProfileDao,
-    accountDao: AccountDao,
-    repositoryDao: RepositoryDao,
+    private val accounts: AccountRepository,
     private val refresher: AccountDataRefresher
 ) : ViewModel() {
 
     val uiState: StateFlow<ProfileUiState> = combine(
-        profileDao.observe(),
-        accountDao.observe(),
+        accounts.observeProfile(),
         refresher.profileStatus,
-        flow { emit(repositoryDao.getRepositoryCount()) }
-    ) { profile, record, status, localCount ->
-        val cached = profile?.takeIf { record == null || it.userId == record.userId }
+        accounts.observeLocalStarCount()
+    ) { cached, status, localCount ->
         when {
             cached != null -> ProfileUiState.Loaded(
                 profile = cached,
@@ -66,7 +59,7 @@ class ProfileViewModel @Inject constructor(
     init {
         // Home refreshes on load; only a screen with nothing to show starts its own refresh.
         viewModelScope.launch {
-            if (profileDao.get() == null && refresher.profileStatus.value == RefreshStatus.Idle) refresher.refresh()
+            if (!accounts.hasCachedProfile() && refresher.profileStatus.value == RefreshStatus.Idle) refresher.refresh()
         }
     }
 

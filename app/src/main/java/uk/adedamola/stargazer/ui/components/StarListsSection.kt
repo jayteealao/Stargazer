@@ -28,7 +28,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -142,7 +146,14 @@ fun StarListRow(name: String, count: Int?, selected: Boolean, onClick: () -> Uni
 @Composable
 private fun ListsLoading() {
     val block = Color.White.copy(alpha = 0.1f)
-    Column(Modifier.testTag("star-lists-loading")) {
+    Column(
+        Modifier
+            .testTag("star-lists-loading")
+            .semantics {
+                contentDescription = "Loading star lists"
+                liveRegion = LiveRegionMode.Polite
+            }
+    ) {
         listOf(150.dp, 110.dp, 170.dp).forEach { width ->
             Row(
                 modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 28.dp),
@@ -186,7 +197,12 @@ private fun ListsMessage(title: String, body: String, icon: Boolean, onRetry: ((
                 )
                 if (onRetry != null) {
                     TextButton(onClick = onRetry) {
-                        Text(text = "[ RETRY ]", fontFamily = FontFamily.Monospace, color = FactoryCyan)
+                        Text(
+                            text = "[ RETRY ]",
+                            fontFamily = FontFamily.Monospace,
+                            color = FactoryCyan,
+                            modifier = Modifier.semantics { contentDescription = "Retry" }
+                        )
                     }
                 }
             }

@@ -8,8 +8,9 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * One readable status line for a failed GitHub call, in the app's terminal voice. A rate limit
- * names the time GitHub accepts requests again. None of these signs the person out: only a 401
+ * One readable status line for a failed GitHub call, in the app's terminal voice: a code, then
+ * what to do next. A rate limit names the time GitHub accepts requests again. Exception messages
+ * are never shown. None of these signs the person out: only a 401
  * does, and that is handled before the error reaches the screen.
  */
 object GitHubErrorText {
@@ -20,8 +21,8 @@ object GitHubErrorText {
         nowMillis: Long = System.currentTimeMillis()
     ): String = when (e) {
         is HttpException -> describeHttp(e, zone, nowMillis)
-        is IOException -> "NO_CONNECTION"
-        else -> "ERROR: ${e.message}"
+        is IOException -> "NO_CONNECTION — check the internet and try again"
+        else -> "UNEXPECTED_ERROR — try again"
     }
 
     private fun describeHttp(e: HttpException, zone: TimeZone, nowMillis: Long): String {
@@ -32,10 +33,10 @@ object GitHubErrorText {
             }
         }
         return when {
-            code == 403 -> "GITHUB_REFUSED (403)"
+            code == 403 -> "GITHUB_REFUSED (403) — try again later"
             code == 429 -> "RATE_LIMITED — try again in a minute"
             code >= 500 -> "GITHUB_ERROR ($code) — try again in a minute"
-            else -> "ERROR: HTTP $code"
+            else -> "GITHUB_ERROR ($code) — try again later"
         }
     }
 

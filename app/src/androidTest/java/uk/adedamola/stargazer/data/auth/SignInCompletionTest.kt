@@ -21,7 +21,7 @@ import uk.adedamola.stargazer.ui.NavigationViewModel
 import uk.adedamola.stargazer.ui.screens.SignInPhase
 import uk.adedamola.stargazer.ui.screens.SignInViewModel
 
-/** After approval: `GET /user`, the account record, the encrypted key, then Home (AC-5). */
+/** After approval: `GET /user`, the account record, the encrypted key, then Home. */
 @RunWith(AndroidJUnit4::class)
 class SignInCompletionTest {
 

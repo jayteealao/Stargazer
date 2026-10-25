@@ -33,7 +33,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** Only a 401 ends access: the key goes once, local data stays (AC-21, AC-22, AC-23). */
+/** Only a 401 ends access: the key goes once, local data stays. */
 @RunWith(AndroidJUnit4::class)
 class AccessEndedTest {
 
@@ -141,9 +141,10 @@ class AccessEndedTest {
             Scripted(403, headers = mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to "1800000000"))
                 to "RATE_LIMITED — RETRY AT 08:00",
             Scripted(429, headers = mapOf("retry-after" to "60")) to "RATE_LIMITED — RETRY AT 00:01",
-            Scripted(403) to "GITHUB_REFUSED (403)",
+            Scripted(403) to "GITHUB_REFUSED (403) — try again later",
             Scripted(500) to "GITHUB_ERROR (500) — try again in a minute",
             Scripted(503) to "GITHUB_ERROR (503) — try again in a minute",
+            Scripted(404) to "GITHUB_ERROR (404) — try again later",
         )
         for ((scripted, text) in cases) {
             network.answer = { scripted }
@@ -153,7 +154,8 @@ class AccessEndedTest {
             assertEquals("still signed in after ${scripted.code}", key, keys.tokenManager.currentKey())
             assertFalse(session.accessEnded.value)
         }
-        assertEquals("NO_CONNECTION", GitHubErrorText.describe(IOException("offline")))
+        assertEquals("NO_CONNECTION — check the internet and try again", GitHubErrorText.describe(IOException("offline")))
+        assertEquals("UNEXPECTED_ERROR — try again", GitHubErrorText.describe(IllegalStateException("internal detail")))
     }
 
     @OptIn(ExperimentalPagingApi::class)

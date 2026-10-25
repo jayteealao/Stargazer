@@ -12,7 +12,7 @@ import org.junit.runner.RunWith
 import uk.adedamola.stargazer.ui.AuthState
 import uk.adedamola.stargazer.ui.NavigationViewModel
 
-/** Sign-out deletes the key only (AC-12). */
+/** Sign-out deletes the key only. */
 @RunWith(AndroidJUnit4::class)
 class SignOutTest {
 

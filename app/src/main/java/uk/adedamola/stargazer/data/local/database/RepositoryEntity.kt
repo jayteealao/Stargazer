@@ -293,6 +293,16 @@ interface RepositoryDao {
     @Query("SELECT COUNT(*) FROM repositories")
     suspend fun getRepositoryCount(): Int
 
+    // "Starred here" means stored and with no unstar waiting; these two queries hold that rule.
+
+    /** Of [ids], the repositories starred here. */
+    @Query("SELECT id FROM repositories WHERE id IN (:ids) AND id NOT IN (SELECT repositoryId FROM pending_unstars)")
+    suspend fun getStarredIdsAmong(ids: List<Int>): List<Int>
+
+    /** How many repositories are starred here. */
+    @Query("SELECT COUNT(*) FROM repositories WHERE id NOT IN (SELECT repositoryId FROM pending_unstars)")
+    fun observeStarredCount(): Flow<Int>
+
     @Query("SELECT COUNT(*) FROM repositories WHERE starredAt IS NOT NULL")
     suspend fun getRepositoryCountWithStarredAt(): Int
 

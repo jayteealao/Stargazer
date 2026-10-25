@@ -50,8 +50,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Star and unstar against a scripted GitHub: the DELETE goes out at once, Undo re-stars, local
  * data goes only after GitHub confirms and the window ends, every failure restores the repo,
- * offline and rate-limited taps send nothing, and one request runs per repo
- * (AC-29, AC-30, AC-31, AC-34, AC-35, AC-36, S7-1).
+ * offline and rate-limited taps send nothing, and one request runs per repo.
  */
 @RunWith(AndroidJUnit4::class)
 class StarEngineTest {
@@ -168,7 +167,7 @@ class StarEngineTest {
         assertEquals(2, db.repositoryDao().getRepositoryCount())
     }
 
-    /** With the real clock and the real wait, Undo is offered for about five seconds (AC-29). */
+    /** With the real clock and the real wait, Undo is offered for about five seconds. */
     @Test
     fun undoIsOfferedForAboutFiveSecondsOnTheRealClock() = runBlocking<Unit> {
         val realTime = starEngine(db, network, keys.tokenManager, scope, connectivity, System::currentTimeMillis, { delay(it) })
