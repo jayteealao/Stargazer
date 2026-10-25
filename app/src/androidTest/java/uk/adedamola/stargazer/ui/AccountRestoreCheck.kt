@@ -48,22 +48,27 @@ class AccountRestoreCheck {
     @Inject lateinit var session: AccessSession
 
     private val args = InstrumentationRegistry.getArguments()
+    private val seeding = args.getString("restoreSeed") == "true"
+    private val checking = args.getString("restoreCheck") == "true"
 
     @Before
     fun setUp() {
+        // Skip before injecting: each injection builds the app's singletons again, and a second
+        // live store over the key file in one process is refused.
+        assumeTrue(seeding || checking)
         hiltRule.inject()
     }
 
     @Test
     fun seed() = runBlocking<Unit> {
-        assumeTrue(args.getString("restoreSeed") == "true")
+        assumeTrue(seeding)
         seedLocalData(db)
         tokenManager.saveToken("restore-fixture-not-real")
     }
 
     @Test
     fun restored() = runBlocking<Unit> {
-        assumeTrue(args.getString("restoreCheck") == "true")
+        assumeTrue(checking)
         assertNull("the key is not restored", tokenManager.currentKey())
         assertEquals(FIXTURE_USER_ID, db.accountDao().get()!!.userId)
         assertTrue("favorite restored", db.repositoryDao().getRepositoryById(900_001)!!.isFavorite)
