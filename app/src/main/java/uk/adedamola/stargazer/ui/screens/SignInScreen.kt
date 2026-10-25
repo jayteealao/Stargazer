@@ -62,6 +62,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import uk.adedamola.stargazer.ui.components.AccountChangeDialog
+import uk.adedamola.stargazer.ui.components.KeepDataDialog
 import uk.adedamola.stargazer.ui.components.StargazerButton
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
@@ -101,6 +103,22 @@ fun SignInRoute(
         onCopyCode = { state.userCode?.let { copyCode(context, it) } },
         cursorBlinks = cursorBlinks
     )
+    when (val decision = state.decision) {
+        is AccountDecision.ChangeAccount -> AccountChangeDialog(
+            old = decision.old,
+            new = decision.new,
+            onContinue = viewModel::onContinue,
+            onCancel = viewModel::onCancel
+        )
+        is AccountDecision.KeepData -> KeepDataDialog(
+            account = decision.account,
+            counts = decision.counts,
+            onKeep = viewModel::onKeep,
+            onRemove = viewModel::onRemove,
+            onDismiss = viewModel::onCancel
+        )
+        null -> Unit
+    }
 }
 
 /** Stateless sign-in screen: one prompt line, the code, one hint line and one button. */
