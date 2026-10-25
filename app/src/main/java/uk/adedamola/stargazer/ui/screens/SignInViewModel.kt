@@ -15,9 +15,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import uk.adedamola.stargazer.data.auth.AccessSession
+import uk.adedamola.stargazer.data.auth.AccountSummary
 import uk.adedamola.stargazer.data.auth.DeviceFlowSignIn
 import uk.adedamola.stargazer.data.auth.DeviceFlowStep
+import uk.adedamola.stargazer.data.auth.LocalDataCounts
+import uk.adedamola.stargazer.data.auth.PendingSignIn
 import uk.adedamola.stargazer.data.auth.SignInCompleter
+import uk.adedamola.stargazer.data.auth.SignInOutcome
 import java.io.IOException
 import javax.inject.Inject
 import kotlin.time.Duration
@@ -37,12 +41,22 @@ sealed interface SignInPhase {
     data object NoBrowser : SignInPhase
 }
 
+/** A question the person must answer before an approved sign-in finishes. */
+sealed interface AccountDecision {
+    /** A different GitHub account signed in: remove [old]'s data and continue, or cancel. */
+    data class ChangeAccount(val old: AccountSummary, val new: AccountSummary) : AccountDecision
+
+    /** Nobody knows whose data is on the phone: keep it for [account], or remove it. */
+    data class KeepData(val account: AccountSummary, val counts: LocalDataCounts) : AccountDecision
+}
+
 data class SignInUiState(
     val phase: SignInPhase = SignInPhase.Idle,
     val userCode: String? = null,
     val verificationUri: String = DEVICE_VERIFICATION_URI,
     val secondsLeft: Long = 0,
-    val accessEnded: Boolean = false
+    val accessEnded: Boolean = false,
+    val decision: AccountDecision? = null
 ) {
     /** The primary button does nothing while a request is in flight. */
     val actionEnabled: Boolean
@@ -62,6 +76,9 @@ class SignInViewModel @Inject constructor(
     private var flowJob: Job? = null
     private var tickJob: Job? = null
 
+    /** The approved key waiting for the answer to [SignInUiState.decision]; memory only. */
+    private var pending: PendingSignIn? = null
+
     val uiState: StateFlow<SignInUiState> =
         combine(local, session.accessEnded) { state, ended -> state.copy(accessEnded = ended) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, SignInUiState(accessEnded = session.accessEnded.value))
@@ -70,6 +87,7 @@ class SignInViewModel @Inject constructor(
     fun signIn() {
         flowJob?.cancel()
         tickJob?.cancel()
+        pending = null
         session.acknowledgeAccessEnded()
         flowJob = viewModelScope.launch {
             engine.run().collect { step -> onStep(step) }
@@ -101,11 +119,18 @@ class SignInViewModel @Inject constructor(
                 tickJob?.cancel()
                 local.update { it.copy(phase = SignInPhase.Completing) }
                 val result = completer.complete(step.key)
-                local.value = if (result.isSuccess) {
+                local.value = when (val outcome = result.getOrNull()) {
                     // Home opens because the key is stored; this screen is ready for a later sign-in.
-                    SignInUiState()
-                } else {
-                    local.value.copy(phase = failurePhase(result.exceptionOrNull()))
+                    SignInOutcome.Done -> SignInUiState()
+                    is SignInOutcome.AccountChange -> {
+                        pending = outcome.pending
+                        local.value.copy(decision = AccountDecision.ChangeAccount(outcome.old, outcome.new))
+                    }
+                    is SignInOutcome.KeepData -> {
+                        pending = outcome.pending
+                        local.value.copy(decision = AccountDecision.KeepData(outcome.new, outcome.counts))
+                    }
+                    null -> local.value.copy(phase = failurePhase(result.exceptionOrNull()))
                 }
             }
             DeviceFlowStep.Expired -> end(SignInPhase.Expired)
@@ -113,6 +138,36 @@ class SignInViewModel @Inject constructor(
             DeviceFlowStep.Offline -> end(SignInPhase.Offline)
             is DeviceFlowStep.GitHubError -> end(SignInPhase.GitHubError(step.label))
         }
+    }
+
+    /** Continue on the account-change dialog: the old account's data is removed, then Home opens. */
+    fun onContinue() = decide { completer.confirmAccountChange(it) }
+
+    /** Keep on the keep-data dialog: the data stays and belongs to the new account. */
+    fun onKeep() = decide { completer.keepData(it) }
+
+    /** Remove on the keep-data dialog: the data is removed, then Home opens. */
+    fun onRemove() = decide { completer.removeData(it) }
+
+    /** Cancel or back on either dialog: the new key is forgotten, the data stays, sign-in starts over. */
+    fun onCancel() {
+        pending = null
+        local.value = SignInUiState()
+    }
+
+    private fun decide(action: suspend (PendingSignIn) -> Result<Unit>) {
+        val held = pending ?: return
+        pending = null
+        local.update { it.copy(decision = null) }
+        viewModelScope.launch {
+            val result = action(held)
+            local.value = if (result.isSuccess) SignInUiState()
+            else local.value.copy(phase = failurePhase(result.exceptionOrNull()))
+        }
+    }
+
+    override fun onCleared() {
+        pending = null
     }
 
     private fun end(phase: SignInPhase) {
