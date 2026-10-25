@@ -1,10 +1,13 @@
 package uk.adedamola.stargazer.data.remote.api
 
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
@@ -99,6 +102,30 @@ interface GitHubApiService {
     suspend fun getAuthenticatedUser(
         @Header("Authorization") authorization: String? = null
     ): GitHubUser
+
+    /**
+     * Stars a repository for the signed-in account. GitHub answers 204. The request has no body:
+     * Retrofit sends an empty one with `Content-Length: 0`, as GitHub asks for this call.
+     */
+    @PUT("user/starred/{owner}/{repo}")
+    suspend fun starRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): Response<Unit>
+
+    /** Removes the signed-in account's star from a repository. GitHub answers 204. */
+    @DELETE("user/starred/{owner}/{repo}")
+    suspend fun unstarRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): Response<Unit>
+
+    /** Whether the signed-in account stars a repository: 204 when it does, 404 when it does not. */
+    @GET("user/starred/{owner}/{repo}")
+    suspend fun isStarred(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): Response<Unit>
 
     companion object {
         const val BASE_URL = "https://api.github.com/"

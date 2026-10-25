@@ -27,10 +27,8 @@ object GitHubErrorText {
     private fun describeHttp(e: HttpException, zone: TimeZone, nowMillis: Long): String {
         val code = e.code()
         if (code == 403 || code == 429) {
-            retryAt(e, nowMillis)?.let { at ->
-                // java.text, not java.time: minSdk 23 has no java.time without desugaring.
-                val clock = SimpleDateFormat("HH:mm", Locale.US).apply { timeZone = zone }
-                return "RATE_LIMITED — RETRY AT ${clock.format(Date(at))}"
+            retryAtMillis(e, nowMillis)?.let { at ->
+                return "RATE_LIMITED — RETRY AT ${clockText(at, zone)}"
             }
         }
         return when {
@@ -41,8 +39,16 @@ object GitHubErrorText {
         }
     }
 
-    /** Epoch millis from `retry-after` (seconds) or an exhausted `x-ratelimit-reset` (epoch seconds). */
-    private fun retryAt(e: HttpException, nowMillis: Long): Long? {
+    /** [at] (epoch millis) as `HH:mm` in [zone]. */
+    fun clockText(at: Long, zone: TimeZone = TimeZone.getDefault()): String =
+        // java.text, not java.time: minSdk 23 has no java.time without desugaring.
+        SimpleDateFormat("HH:mm", Locale.US).apply { timeZone = zone }.format(Date(at))
+
+    /**
+     * Epoch millis from `retry-after` (seconds) or an exhausted `x-ratelimit-reset` (epoch
+     * seconds); null when the answer names no reset time.
+     */
+    internal fun retryAtMillis(e: HttpException, nowMillis: Long): Long? {
         val headers = e.response()?.headers() ?: return null
         headers["retry-after"]?.trim()?.toLongOrNull()?.let { return nowMillis + it * 1000 }
         if (headers["x-ratelimit-remaining"]?.trim() == "0") {
