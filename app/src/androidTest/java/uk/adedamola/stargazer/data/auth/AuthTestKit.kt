@@ -34,6 +34,17 @@ import uk.adedamola.stargazer.data.local.database.SyncMetadata
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
+import uk.adedamola.stargazer.data.remote.api.GitHubGraphQlApi
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import java.io.File
 import java.io.IOException
 import java.security.KeyStore
@@ -149,6 +160,128 @@ fun apiService(
     )
     return NetworkModule.provideGitHubApiService(NetworkModule.provideRetrofit(client, NetworkModule.provideJson()))
 }
+
+/** GitHub's GraphQL endpoint on the same production stack as [apiService]. */
+fun graphQlApi(
+    keys: AccessKeyProvider,
+    network: ScriptedNetwork,
+    session: AccessSession? = null,
+): GitHubGraphQlApi {
+    val client = NetworkModule.buildGitHubClient(
+        authInterceptor = AuthInterceptor(keys),
+        loggingInterceptor = NetworkModule.createLoggingInterceptor(true, HttpLoggingInterceptor.Logger { }),
+        terminal = network,
+        accessEnded = session?.let { AccessEndedInterceptor(it) },
+    )
+    return NetworkModule.provideGitHubGraphQlApi(NetworkModule.provideRetrofit(client, NetworkModule.provideJson()))
+}
+
+/** The body a request was sent with, as text. */
+fun requestBody(request: Request): String =
+    request.body?.let { body -> Buffer().also { body.writeTo(it) }.readUtf8() }.orEmpty()
+
+/** The GraphQL request [body] as JSON (query and variables). */
+fun graphQlBody(body: String): JsonObject =
+    kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject
+
+/** A full `GET /user` answer with the profile fields. */
+fun profileJson(
+    id: Long,
+    login: String,
+    name: String? = null,
+    bio: String? = null,
+    followers: Int = 0,
+    following: Int = 0,
+    publicRepos: Int = 0,
+    location: String? = null,
+    company: String? = null,
+    blog: String? = null,
+): String = buildJsonObject {
+    put("id", id)
+    put("login", login)
+    put("avatar_url", "https://avatars.example/$id.png")
+    put("html_url", "https://github.com/$login")
+    put("name", name)
+    put("bio", bio)
+    put("followers", followers)
+    put("following", following)
+    put("public_repos", publicRepos)
+    put("location", location)
+    put("company", company)
+    put("blog", blog)
+}.toString()
+
+/** One star list in a scripted answer: [ids] are the repository ids GitHub returns on the first page. */
+data class FakeList(
+    val id: String,
+    val name: String,
+    val ids: List<Long> = emptyList(),
+    val total: Int = ids.size,
+    val hasNextPage: Boolean = false,
+    val endCursor: String? = null,
+)
+
+private fun pageInfo(hasNextPage: Boolean, endCursor: String?) = buildJsonObject {
+    put("hasNextPage", hasNextPage)
+    put("endCursor", endCursor)
+}
+
+private fun repoNodes(ids: List<Long>): JsonArray = buildJsonArray {
+    ids.forEach { add(buildJsonObject { put("databaseId", it) }) }
+}
+
+/** A `viewer.lists` answer. */
+fun listsJson(
+    viewerId: Long,
+    starred: Int,
+    lists: List<FakeList>,
+    hasNextPage: Boolean = false,
+    endCursor: String? = null,
+): String = buildJsonObject {
+    putJsonObject("data") {
+        putJsonObject("viewer") {
+            put("databaseId", viewerId)
+            putJsonObject("starredRepositories") { put("totalCount", starred) }
+            putJsonObject("lists") {
+                put("pageInfo", pageInfo(hasNextPage, endCursor))
+                putJsonArray("nodes") {
+                    lists.forEach { list ->
+                        add(buildJsonObject {
+                            put("id", list.id)
+                            put("name", list.name)
+                            put("description", JsonNull)
+                            put("isPrivate", false)
+                            putJsonObject("items") {
+                                put("totalCount", list.total)
+                                put("pageInfo", pageInfo(list.hasNextPage, list.endCursor))
+                                put("nodes", repoNodes(list.ids))
+                            }
+                        })
+                    }
+                }
+            }
+        }
+    }
+}.toString()
+
+/** A `node(id:)` answer with the next page of one list's repositories. */
+fun listItemsPageJson(ids: List<Long>, hasNextPage: Boolean = false, endCursor: String? = null): String =
+    buildJsonObject {
+        putJsonObject("data") {
+            putJsonObject("node") {
+                putJsonObject("items") {
+                    put("pageInfo", pageInfo(hasNextPage, endCursor))
+                    put("nodes", repoNodes(ids))
+                }
+            }
+        }
+    }.toString()
+
+/** A GraphQL answer that carries errors and no data. */
+fun graphQlErrorsJson(): String = buildJsonObject {
+    put("data", JsonNull)
+    putJsonArray("errors") { add(buildJsonObject { put("message", JsonPrimitive("Something went wrong")) }) }
+}.toString()
 
 fun inMemoryDatabase(): AppDatabase =
     Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, AppDatabase::class.java)
