@@ -17,9 +17,12 @@ appId: uk.adedamola.stargazer
     timeout: 10000
 - takeScreenshot: ${OUT}/home
 
+# Swipe across the first card (repo-01) from its right edge; a swipe started on the name is too
+# short on a wide screen to pass the unstar threshold.
 - swipe:
-    from: "repo-01"
-    direction: LEFT
+    start: 90%, 35%
+    end: 5%, 35%
+    duration: 600
 - extendedWaitUntil:
     visible: ".*CONNECTION_NEEDED.*"
     timeout: 5000
@@ -39,10 +42,13 @@ appId: uk.adedamola.stargazer
     timeout: 10000
 - tapOn: "SEARCH_REPOSITORIES..."
 - inputText: "repo"
-- extendedWaitUntil:
-    visible: "IN_YOUR_STARS.*"
-    timeout: 5000
 - hideKeyboard
+# Home keeps its scroll place after the repo screen, so the section label may sit above the top.
+- scrollUntilVisible:
+    element: "IN_YOUR_STARS.*"
+    direction: UP
+    speed: 80
+    timeout: 90000
 - takeScreenshot: ${OUT}/search-local-offline
 - scrollUntilVisible:
     element: "CONNECTION_NEEDED — GitHub search needs the internet."
