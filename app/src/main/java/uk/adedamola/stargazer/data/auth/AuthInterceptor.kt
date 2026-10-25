@@ -8,6 +8,8 @@ import javax.inject.Singleton
 /**
  * Adds GitHub's REST API contract headers and the access key to requests for api.github.com.
  * Requests to any other host pass through unchanged, so the key never leaves for another host.
+ * A request that already carries an Authorization header (a new key checked during sign-in)
+ * keeps it.
  */
 @Singleton
 class AuthInterceptor @Inject constructor(
@@ -19,7 +21,9 @@ class AuthInterceptor @Inject constructor(
         if (original.url.host != GITHUB_API_HOST) return chain.proceed(original)
 
         val request = original.newBuilder().apply {
-            accessKeyProvider.currentKey()?.let { header("Authorization", "Bearer $it") }
+            if (original.header("Authorization") == null) {
+                accessKeyProvider.currentKey()?.let { header("Authorization", "Bearer $it") }
+            }
             if (original.header("Accept") == null) header("Accept", DEFAULT_ACCEPT)
             header("X-GitHub-Api-Version", API_VERSION)
         }.build()

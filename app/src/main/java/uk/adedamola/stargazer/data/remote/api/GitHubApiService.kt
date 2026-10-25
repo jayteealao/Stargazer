@@ -8,6 +8,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
+import uk.adedamola.stargazer.data.remote.model.GitHubUser
 import uk.adedamola.stargazer.data.remote.model.StarredRepository
 
 interface GitHubApiService {
@@ -89,6 +90,15 @@ interface GitHubApiService {
     suspend fun renderMarkdown(
         @Body request: MarkdownRenderRequest
     ): String
+
+    /**
+     * The signed-in account. [authorization] is set only during sign-in, to check a new key
+     * before it is stored; otherwise the stored key is used.
+     */
+    @GET("user")
+    suspend fun getAuthenticatedUser(
+        @Header("Authorization") authorization: String? = null
+    ): GitHubUser
 
     companion object {
         const val BASE_URL = "https://api.github.com/"
