@@ -23,6 +23,8 @@ import dagger.hilt.testing.TestInstallIn
 import uk.adedamola.stargazer.data.StargazerRepository
 import uk.adedamola.stargazer.data.di.DataModule
 import uk.adedamola.stargazer.data.di.FakeStargazerRepository
+import uk.adedamola.stargazer.data.repository.GitHubRepository
+import uk.adedamola.stargazer.data.repository.GitHubRepositoryImpl
 
 @Module
 @TestInstallIn(
@@ -35,4 +37,10 @@ interface FakeDataModule {
     abstract fun bindRepository(
         fakeRepository: FakeStargazerRepository
     ): StargazerRepository
+
+    // DataModule also binds GitHubRepository; replacing it must keep that binding.
+    @Binds
+    abstract fun bindGitHubRepository(
+        gitHubRepository: GitHubRepositoryImpl
+    ): GitHubRepository
 }
