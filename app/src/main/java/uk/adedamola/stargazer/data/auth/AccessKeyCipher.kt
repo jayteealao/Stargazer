@@ -1,9 +1,13 @@
 package uk.adedamola.stargazer.data.auth
 
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
+import java.security.GeneralSecurityException
 import java.security.InvalidKeyException
 import java.security.KeyStore
+import java.security.UnrecoverableKeyException
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -15,10 +19,40 @@ import javax.crypto.spec.GCMParameterSpec
 interface AccessKeyCipher {
     fun encrypt(plain: String): ByteArray
 
-    /** Throws when the blob cannot be decrypted, including when the encryption key is missing. */
+    /**
+     * Throws when the blob cannot be decrypted. Throws [MissingEncryptionKeyException] when the
+     * encryption key is missing. [isPermanentDecryptFailure] tells whether the blob can ever be read.
+     */
     fun decrypt(blob: ByteArray): String
 
     fun deleteKey()
+}
+
+/** The Keystore holds no key under the alias, so the stored blob can never be decrypted. */
+class MissingEncryptionKeyException : GeneralSecurityException("Encryption key missing")
+
+/**
+ * Whether a decrypt failure means the stored blob can never be read again:
+ * - [MissingEncryptionKeyException]: the key is gone, or the blob was restored onto a device
+ *   without its key;
+ * - [KeyPermanentlyInvalidatedException]: the key is invalidated;
+ * - [UnrecoverableKeyException] with no cause, or with an invalidated-key cause: how the
+ *   Keystore's `getKey` reports an invalidated key or an empty alias;
+ * - [AEADBadTagException]: the blob was tampered with, or sealed by another key;
+ * - [IllegalArgumentException]: the blob is too short or has an unknown version.
+ *
+ * Everything else is short-lived and keeps the blob: a plain [InvalidKeyException] (how
+ * `Cipher.init` wraps other Keystore errors), `UserNotAuthenticatedException`, an
+ * [UnrecoverableKeyException] caused by a Keystore error, `KeyStoreException`,
+ * `ProviderException`, `IllegalBlockSizeException` and any other runtime error.
+ */
+internal fun isPermanentDecryptFailure(e: Throwable): Boolean = when (e) {
+    is MissingEncryptionKeyException -> true
+    is KeyPermanentlyInvalidatedException -> true
+    is UnrecoverableKeyException -> e.cause == null || e.cause is KeyPermanentlyInvalidatedException
+    is AEADBadTagException -> true
+    is IllegalArgumentException -> true
+    else -> false
 }
 
 /**
@@ -35,8 +69,12 @@ class AndroidKeystoreCipher(private val alias: String) : AccessKeyCipher {
     override fun encrypt(plain: String): ByteArray {
         val cipher = try {
             initEncrypt(getOrCreateKey())
-        } catch (e: InvalidKeyException) {
-            // Includes KeyPermanentlyInvalidatedException: replace the unusable key once.
+        } catch (e: GeneralSecurityException) {
+            // An invalidated key (KeyPermanentlyInvalidatedException from Cipher.init, or the
+            // cause-less UnrecoverableKeyException from getKey) is replaced once.
+            val replaceable = e is InvalidKeyException ||
+                (e is UnrecoverableKeyException && isPermanentDecryptFailure(e))
+            if (!replaceable) throw e
             deleteKey()
             initEncrypt(getOrCreateKey())
         }
@@ -50,7 +88,7 @@ class AndroidKeystoreCipher(private val alias: String) : AccessKeyCipher {
         require(blob.size > 1 + IV_LENGTH + TAG_LENGTH_BYTES) { "Ciphertext too short" }
         require(blob[0] == VERSION) { "Unknown ciphertext version" }
         val key = keyStore().getKey(alias, null) as? SecretKey
-            ?: throw IllegalStateException("Encryption key missing")
+            ?: throw MissingEncryptionKeyException()
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_LENGTH_BYTES * 8, blob, 1, IV_LENGTH))
         cipher.updateAAD(ASSOCIATED_DATA)
