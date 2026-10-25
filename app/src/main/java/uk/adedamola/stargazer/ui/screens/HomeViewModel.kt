@@ -23,7 +23,7 @@ import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
-import uk.adedamola.stargazer.data.auth.TokenManager
+import uk.adedamola.stargazer.data.auth.AccessSession
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.SortOption
@@ -52,7 +52,7 @@ class HomeViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository,
-    private val tokenManager: TokenManager
+    private val accessSession: AccessSession
 ) : ViewModel() {
 
     companion object {
@@ -304,7 +304,7 @@ class HomeViewModel @Inject constructor(
 
     fun logout() {
         viewModelScope.launch {
-            tokenManager.clearToken()
+            accessSession.signOut()
         }
     }
 

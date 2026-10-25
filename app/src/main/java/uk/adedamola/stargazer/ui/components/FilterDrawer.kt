@@ -547,14 +547,14 @@ fun FilterDrawerContent(
                 }
             }
 
-            // Logout Button
+            // Sign out: deletes the key only; local stars, favorites, pins and tags stay.
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(
                 onClick = onLogout,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "[ DISCONNECT_SESSION ]",
+                    text = "[ SIGN_OUT ]",
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.error
                 )
