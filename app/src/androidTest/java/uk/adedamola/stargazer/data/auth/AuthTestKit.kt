@@ -509,6 +509,56 @@ fun searchJson(total: Int, repos: List<JsonObject>): String = buildJsonObject {
     put("items", JsonArray(repos))
 }.toString()
 
+/** When fixture repository [id] (900_000 + n, as [fixtureRepo] numbers it) was starred. */
+fun starredAtOf(id: Int): Long = 1_760_000_000_000L - (id - 900_000)
+
+/** A `GET /user/starred` answer in the star+json shape: `{starred_at, repo}` per entry. */
+fun starredJson(entries: List<Pair<Int, Long>>): String = buildJsonArray {
+    entries.forEach { (id, at) ->
+        add(buildJsonObject {
+            put("starred_at", java.time.Instant.ofEpochMilli(at).toString())
+            put("repo", repoJson(id, "fixture", "repo-${id - 900_000}"))
+        })
+    }
+}.toString()
+
+/**
+ * GitHub's starred list holding [ids] in that order, answered page by page as
+ * `GET /user/starred?page=N&per_page=100` asks for it. [failPage] answers [failWith] instead
+ * (-1: no connection). Every other request is null, for the caller's own answers.
+ */
+fun starredPages(ids: List<Int>, failPage: Int? = null, failWith: Int = -1): (Request) -> Scripted? {
+    val pages = ids.chunked(100).map { chunk -> starredJson(chunk.map { it to starredAtOf(it) }) }
+    return { request ->
+        if (request.url.encodedPath != "/user/starred") null
+        else {
+            val page = request.url.queryParameter("page")?.toInt() ?: 1
+            when {
+                page == failPage -> Scripted(failWith, """{"message":"scripted failure"}""")
+                page in 1..pages.size -> Scripted(200, pages[page - 1])
+                else -> Scripted(200, "[]")
+            }
+        }
+    }
+}
+
+/** Stores fixture repositories [ids] (900_000 + n); each gets the flags and the tag asked for. */
+suspend fun seedRepos(
+    db: AppDatabase,
+    ids: List<Int>,
+    favorite: Boolean = false,
+    pinned: Boolean = false,
+    tagId: Int? = null,
+) {
+    @Suppress("DEPRECATION") // sdlc-debt: test seed uses the deprecated insert-or-replace DAO call (ceiling: test-only; upgrade path: an upsert helper if the DAO drops it)
+    db.repositoryDao().insertRepositories(ids.map { fixtureRepo(it - 900_000) })
+    ids.forEach { id ->
+        if (favorite) db.repositoryDao().updateFavorite(id, true)
+        if (pinned) db.repositoryDao().updatePinned(id, true)
+        tagId?.let { db.repositoryTagDao().addTagToRepository(RepositoryTag(repositoryId = id, tagId = it)) }
+    }
+}
+
 /** Waits up to [timeoutMillis] for [condition]; fails with [what] when it never holds. */
 suspend fun eventually(what: String, timeoutMillis: Long = 5_000, condition: suspend () -> Boolean) {
     try {
