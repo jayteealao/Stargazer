@@ -18,6 +18,7 @@ import uk.adedamola.stargazer.data.auth.AuthInterceptor
 import uk.adedamola.stargazer.data.auth.DeviceFlowApi
 import uk.adedamola.stargazer.data.auth.DeviceFlowSignIn
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
+import uk.adedamola.stargazer.data.remote.api.GitHubGraphQlApi
 import java.util.concurrent.TimeUnit
 import javax.inject.Qualifier
 import javax.inject.Singleton
@@ -173,4 +174,9 @@ object NetworkModule {
     fun provideGitHubApiService(retrofit: Retrofit): GitHubApiService {
         return retrofit.create(GitHubApiService::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideGitHubGraphQlApi(retrofit: Retrofit): GitHubGraphQlApi =
+        retrofit.create(GitHubGraphQlApi::class.java)
 }
