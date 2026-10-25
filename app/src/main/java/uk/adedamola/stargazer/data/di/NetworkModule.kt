@@ -16,6 +16,7 @@ import uk.adedamola.stargazer.BuildConfig
 import uk.adedamola.stargazer.data.auth.AccessEndedInterceptor
 import uk.adedamola.stargazer.data.auth.AuthInterceptor
 import uk.adedamola.stargazer.data.auth.DeviceFlowApi
+import uk.adedamola.stargazer.data.auth.DeviceFlowSignIn
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import java.util.concurrent.TimeUnit
 import javax.inject.Qualifier
@@ -133,6 +134,11 @@ object NetworkModule {
     @Singleton
     fun provideDeviceFlowApi(@SignInHttp retrofit: Retrofit): DeviceFlowApi =
         retrofit.create(DeviceFlowApi::class.java)
+
+    /** A new sign-in per call: each run requests its own code. */
+    @Provides
+    fun provideDeviceFlowSignIn(api: DeviceFlowApi): DeviceFlowSignIn =
+        DeviceFlowSignIn(api, BuildConfig.GITHUB_APP_CLIENT_ID)
 
     @Provides
     @Singleton
