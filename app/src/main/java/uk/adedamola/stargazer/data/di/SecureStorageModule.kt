@@ -6,6 +6,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.preferencesDataStoreFile
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import uk.adedamola.stargazer.data.auth.AccessKeyProvider
 import uk.adedamola.stargazer.data.auth.AndroidKeystoreCipher
+import uk.adedamola.stargazer.data.auth.LegacyAccountStore
 import uk.adedamola.stargazer.data.auth.TokenManager
 import java.io.File
 import javax.inject.Qualifier
@@ -65,4 +67,16 @@ object SecureStorageModule {
 
     @Provides
     fun provideAccessKeyProvider(tokenManager: TokenManager): AccessKeyProvider = tokenManager
+
+    /** The earlier version's preferences file: its old token and the data-owner-unknown marker. */
+    @Provides
+    @Singleton
+    fun provideLegacyAccountStore(@ApplicationContext context: Context): LegacyAccountStore =
+        LegacyAccountStore(
+            PreferenceDataStoreFactory.create(
+                corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+                produceFile = { context.preferencesDataStoreFile(LegacyAccountStore.FILE_NAME) },
+            )
+        )
 }
