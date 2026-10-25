@@ -13,8 +13,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -176,7 +174,4 @@ class AccessEndedTest {
         withTimeout(10_000) { navigation.authState.first { it == AuthState.Unauthenticated } }
         assertTrue(session.accessEnded.value)
     }
-
-    @Suppress("unused")
-    private fun body(text: String) = text.toResponseBody("application/json".toMediaType())
 }
