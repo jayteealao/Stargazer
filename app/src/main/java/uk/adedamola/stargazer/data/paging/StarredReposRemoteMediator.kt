@@ -60,6 +60,11 @@ class StarredReposRemoteMediator @Inject constructor(
     private val _syncProgress = MutableStateFlow(SyncProgress())
     val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
 
+    /** Forgets the progress of the previous account's sync, after its data was removed. */
+    fun resetSyncProgress() {
+        _syncProgress.value = SyncProgress()
+    }
+
     /**
      * Always trigger initial refresh to check for new starred repos.
      */
