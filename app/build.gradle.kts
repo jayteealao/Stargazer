@@ -41,6 +41,17 @@ android {
             useSupportLibrary = true
         }
 
+        // Public client ID of the GitHub App used for device-code sign-in (no client secret exists).
+        // A fork overrides it with the Gradle property or environment variable GITHUB_APP_CLIENT_ID.
+        val githubAppClientId = providers.gradleProperty("GITHUB_APP_CLIENT_ID")
+            .orElse(providers.environmentVariable("GITHUB_APP_CLIENT_ID"))
+            .orElse("Iv23lisYkUHBDnhumqsZ")
+            .get()
+        if (githubAppClientId.isBlank()) {
+            error("GITHUB_APP_CLIENT_ID is blank: set it as a Gradle property or environment variable, or remove the empty value.")
+        }
+        buildConfigField("String", "GITHUB_APP_CLIENT_ID", "\"$githubAppClientId\"")
+
         // Enable room auto-migrations
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
