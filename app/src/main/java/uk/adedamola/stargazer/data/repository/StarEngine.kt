@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,6 +35,9 @@ import java.util.concurrent.ConcurrentHashMap
 data class RepoRef(val id: Int, val owner: String, val name: String) {
     val fullName: String get() = "$owner/$name"
 }
+
+/** The star endpoints' name of this repository. */
+fun GitHubRepository.toRef() = RepoRef(id, owner.login, name)
 
 /** What a tap on a star control did. */
 sealed interface Attempt {
@@ -189,10 +193,15 @@ class StarEngine(
 
     /**
      * Undoes the unstar of [repoId]: a PUT, after any DELETE still running for it. When
-     * the DELETE already failed, the repository is back and nothing is sent.
+     * the DELETE already failed, the repository is back and nothing is sent. Undo that cannot
+     * be sent now (offline, rate limited) keeps the window open until it can, so the
+     * repository's local data is not removed while the person is waiting to undo.
      */
     suspend fun undo(repoId: Int): Attempt {
-        refusal(repoId)?.let { return it }
+        refusal(repoId)?.let { refused ->
+            holdWindow(repoId)
+            return refused
+        }
         touch(repoId)
         val lock = lockFor(repoId)
         scope.launch {
@@ -206,10 +215,16 @@ class StarEngine(
                 if (answer.isSuccess && answer.getOrThrow().isSuccessful) {
                     pendingDao.delete(repoId)
                 } else {
-                    // GitHub has the repository unstarred: keep the app in line with it.
-                    failureOf(answer, ref) { StarMessage.RestarFailed(it) }
-                    report(StarMessage.RestarFailed(ref))
-                    finishLocked(repoId)
+                    val message = failureOf(answer, ref) { StarMessage.RestarFailed(it) }
+                    report(message)
+                    if (message is StarMessage.RestarFailed) {
+                        // GitHub refused: it has the repository unstarred, so keep the app in line.
+                        finishLocked(repoId)
+                    } else {
+                        // No connection or a rate limit: Undo stays on offer until it can be sent.
+                        _undoOffer.value = UndoOffer(repoId, ref.fullName)
+                        holdWindowLocked(repoId)
+                    }
                 }
             }
         }
@@ -269,6 +284,26 @@ class StarEngine(
             } finally {
                 lock.unlock()
             }
+        }
+    }
+
+    /**
+     * Keeps the Undo window of [repoId] open while Undo cannot be sent: the window starts again,
+     * in full, once the phone is online and GitHub's rate limit has passed. Only a confirmed
+     * unstar has a window; an unstar whose DELETE is still running is left alone.
+     */
+    private fun holdWindow(repoId: Int) {
+        val running = windowJobs[repoId] ?: return
+        running.cancel()
+        holdWindowLocked(repoId)
+    }
+
+    private fun holdWindowLocked(repoId: Int) {
+        windowJobs[repoId] = scope.launch {
+            connectivity.online.first { it }
+            _rateLimitedUntil.first { until -> until == null || clock() >= until }
+            sleep(windowMillis)
+            lockFor(repoId).withLock { finishLocked(repoId) }
         }
     }
 

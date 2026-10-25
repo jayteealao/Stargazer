@@ -13,9 +13,16 @@ import javax.inject.Singleton
 sealed interface Prepared {
     /**
      * Every page was read for [account], starting at [startedAt] (clock millis). [candidates] are
-     * the repositories stored here before the read that GitHub did not list.
+     * the repositories stored here before the read that GitHub did not list. [stored] and
+     * [listed] count the repositories stored here and listed by GitHub at the read.
      */
-    data class Ready(val account: AccountRecord, val startedAt: Long, val candidates: Set<Int>) : Prepared
+    data class Ready(
+        val account: AccountRecord,
+        val startedAt: Long,
+        val candidates: Set<Int>,
+        val stored: Int,
+        val listed: Int,
+    ) : Prepared
 
     /** No signed-in account, or a page failed: nothing may be removed. */
     data class Failed(val error: Throwable?) : Prepared
@@ -47,7 +54,10 @@ sealed interface Outcome {
  * account changed since the read started.
  *
  * The first reconcile after a sign-in that would remove anything waits for the person: the caller
- * shows the count and calls [apply] on Continue. A finished reconcile stores the sign-in it ran for
+ * shows the count and calls [apply] on Continue. So does any reconcile whose answer looks wrong: an
+ * empty list while repositories are stored here, or one that would remove most of them.
+ * A repository the read did not list is asked about once more before it can go (the list can
+ * shift while its pages are read), when there are few such repositories. A finished reconcile stores the sign-in it ran for
  * (the account's `recordedAt`), which a new sign-in always changes. Nothing here logs a key or a
  * body.
  */
@@ -88,13 +98,51 @@ class StarReconciler(
         } catch (e: Exception) {
             return Prepared.Failed(e)
         }
-        return Prepared.Ready(account, startedAt, stored - listed)
+        val candidates = try {
+            confirmUnstarred(stored - listed)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return Prepared.Failed(e)
+        }
+        return Prepared.Ready(account, startedAt, candidates, stored = stored.size, listed = listed.size)
     }
 
-    /** True when [prepared] would remove repositories and no reconcile finished for this sign-in. */
-    suspend fun noticeDue(prepared: Prepared.Ready): Boolean =
-        removable(prepared).isNotEmpty() &&
-            database.syncMetadataDao().getMetadata(MARKER)?.lastSyncTimestamp != prepared.account.recordedAt
+    /**
+     * The [candidates] GitHub confirms it no longer stars, one request each, when there are at most
+     * [CONFIRM_LIMIT]: a star removed elsewhere while the pages were read shifts the later pages,
+     * so the read can miss a repository that is still starred. Any answer but "not starred" keeps
+     * the repository. A larger set goes unconfirmed, and needs the person's Continue when it is
+     * most of the list.
+     */
+    private suspend fun confirmUnstarred(candidates: Set<Int>): Set<Int> {
+        if (candidates.isEmpty() || candidates.size > CONFIRM_LIMIT) return candidates
+        val dao = database.repositoryDao()
+        return candidates.filterTo(HashSet()) { id ->
+            val repo = dao.getRepositoryById(id) ?: return@filterTo false
+            api.isStarred(repo.ownerLogin, repo.name).code() == 404
+        }
+    }
+
+    /**
+     * True when [prepared] would remove repositories and the person must be told first: no
+     * reconcile finished for this sign-in, or the answer looks wrong (see [implausible]).
+     */
+    suspend fun noticeDue(prepared: Prepared.Ready): Boolean = noticeDue(prepared, removable(prepared))
+
+    private suspend fun noticeDue(prepared: Prepared.Ready, removable: Set<Int>): Boolean =
+        removable.isNotEmpty() && (
+            implausible(prepared, removable.size) ||
+                database.syncMetadataDao().getMetadata(MARKER)?.lastSyncTimestamp != prepared.account.recordedAt
+            )
+
+    /**
+     * An empty list while repositories are stored here, or a removal of most of them, is more
+     * likely a wrong answer than the person's own unstars, so it is never applied without asking.
+     */
+    private fun implausible(prepared: Prepared.Ready, removing: Int): Boolean =
+        (prepared.listed == 0 && prepared.stored > 0) ||
+            (removing > LARGE_REMOVAL && removing * 2 > prepared.stored)
 
     /** Removes what [prepared] found, in one transaction, and records the finished reconcile. */
     suspend fun apply(prepared: Prepared.Ready): Outcome = database.withTransaction {
@@ -117,9 +165,11 @@ class StarReconciler(
     suspend fun reconcile(): Outcome = singleFlight.run {
         when (val prepared = prepare()) {
             is Prepared.Failed -> Outcome.Failed(prepared.error)
-            is Prepared.Ready ->
-                if (noticeDue(prepared)) Outcome.NoticeNeeded(removable(prepared).size, prepared)
+            is Prepared.Ready -> {
+                val removable = removable(prepared)
+                if (noticeDue(prepared, removable)) Outcome.NoticeNeeded(removable.size, prepared)
                 else apply(prepared)
+            }
         }
     }
 
@@ -136,5 +186,9 @@ class StarReconciler(
         /** The `sync_metadata` row of the last finished reconcile; the account wipe clears it. */
         const val MARKER = "starred_repos_reconcile"
         private const val PAGE_SIZE = 100
+        /** At most this many unlisted repositories are confirmed one by one. */
+        private const val CONFIRM_LIMIT = 50
+        /** A removal above this count, and of more than half the list, asks first. */
+        private const val LARGE_REMOVAL = 50
     }
 }

@@ -25,7 +25,6 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -42,12 +41,11 @@ import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.data.repository.StarMessage
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
+import uk.adedamola.stargazer.ui.theme.FactorySurfaceGrey
 import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
 import uk.adedamola.stargazer.ui.theme.FactoryWarnContainer
 import uk.adedamola.stargazer.ui.theme.FactoryYellow
 import java.util.TimeZone
-
-private val SnackGround = Color(0xFF333333)
 
 /** What the app snackbar shows: the dark Undo style, or the yellow failure style. */
 data class StarSnackbarVisuals(
@@ -103,7 +101,7 @@ private fun StarSnackbar(data: SnackbarData) {
             .widthIn(max = 560.dp)
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .background(if (failure) FactoryWarnContainer else SnackGround, RectangleShape)
+            .background(if (failure) FactoryWarnContainer else FactorySurfaceGrey, RectangleShape)
             .border(1.dp, accent, RectangleShape)
             .semantics { liveRegion = LiveRegionMode.Polite }
             .padding(start = 16.dp, end = 6.dp),

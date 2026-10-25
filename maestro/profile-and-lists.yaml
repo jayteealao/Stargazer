@@ -19,7 +19,7 @@ appId: uk.adedamola.stargazer
 - assertVisible: "Ada Okafor"
 - assertVisible: "@ada-builds"
 - takeScreenshot: ${OUT}/drawer-account-header
-- assertVisible: "⭐ STAR_LISTS"
+- assertVisible: "STAR_LISTS"
 - assertVisible: "ANDROID LIBRARIES"
 - assertVisible: "RUST TOOLS"
 - takeScreenshot: ${OUT}/drawer-star-lists

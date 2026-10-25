@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,13 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import uk.adedamola.stargazer.data.repository.StarControlState
 import uk.adedamola.stargazer.data.repository.StarMessage
+import uk.adedamola.stargazer.ui.theme.FactoryDisabledBorder
+import uk.adedamola.stargazer.ui.theme.FactoryDisabledText
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
+import uk.adedamola.stargazer.ui.theme.FactoryRestOutline
 import uk.adedamola.stargazer.ui.theme.FactoryTextGrey
 import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
-
-private val RestBorder = Color.White.copy(alpha = 0.3f)
-private val DisabledText = Color(0xFF666666)
-private val DisabledBorder = Color(0xFF333333)
 
 /**
  * The GitHub star control: a square, labelled toggle, so it never reads as the yellow favorite
@@ -70,15 +68,15 @@ fun GitHubStarToggle(
         else -> Icons.Filled.StarBorder
     }
     val content = when {
-        disabled -> DisabledText
+        disabled -> FactoryDisabledText
         state.inFlight -> FactoryTextGrey
         state.starred -> FactoryOrange
         else -> FactoryTextWhite
     }
     val border = when {
-        disabled -> DisabledBorder
+        disabled -> FactoryDisabledBorder
         state.starred && !state.inFlight -> FactoryOrange
-        else -> RestBorder
+        else -> FactoryRestOutline
     }
     Row(
         modifier = modifier
@@ -87,7 +85,15 @@ fun GitHubStarToggle(
             // in-flight state needs words of its own.
             .semantics(mergeDescendants = true) {
                 contentDescription = "Star $fullName"
-                if (state.inFlight) stateDescription = "Saving"
+                if (state.inFlight) {
+                    stateDescription = "Saving"
+                } else if (disabled) {
+                    // The glyph and dimming alone do not say why the switch cannot act.
+                    stateDescription = state.status
+                        ?.takeIf { it is StarMessage.RateLimited || it is StarMessage.ConnectionNeeded }
+                        ?.let { statusText(it) }
+                        ?: "Unavailable"
+                }
             }
             .toggleable(
                 value = state.starred,

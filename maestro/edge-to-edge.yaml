@@ -26,7 +26,7 @@ appId: uk.adedamola.stargazer
     when:
       notVisible: "SAVE_CURRENT"
     commands:
-      - tapOn: "🔍 PRESETS"
+      - tapOn: "PRESETS"
 - tapOn: "SAVE_CURRENT"
 - assertVisible: "SAVE_PRESET"
 - takeScreenshot: ${OUT}/dialog-save-preset

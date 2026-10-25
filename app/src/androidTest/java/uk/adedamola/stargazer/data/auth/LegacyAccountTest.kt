@@ -69,6 +69,18 @@ class LegacyAccountTest {
     private fun newCompleter() = completer(db, keys.tokenManager, api(), legacy.store)
 
     @Test
+    fun aMarkerInTheOldFileMovesToTheBackedUpFile() = runBlocking<Unit> {
+        legacy.seedMarkerInOldFile()
+
+        assertTrue("still owner unknown", legacy.store.ownerUnknown())
+        assertFalse("the old file, left out of backup, no longer holds it", legacy.oldFileHasMarker())
+        assertTrue("read from its own file from now on", legacy.store.ownerUnknown())
+
+        legacy.store.setOwnerUnknown(false)
+        assertFalse(legacy.store.ownerUnknown())
+    }
+
+    @Test
     fun workingOldTokenRecordsTheAccountAndTheSameAccountKeepsItsData() = runBlocking<Unit> {
         val before = localCounts(db)
 

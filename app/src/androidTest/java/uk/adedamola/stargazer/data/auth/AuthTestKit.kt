@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.data.auth
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -348,12 +349,22 @@ class LegacyStoreFixture {
     private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
     private val dir = File(context.cacheDir, "legacy-" + UUID.randomUUID()).apply { mkdirs() }
     private val job = SupervisorJob()
-    private val dataStore = PreferenceDataStoreFactory.create(
+    private fun file(name: String) = PreferenceDataStoreFactory.create(
         corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
         scope = CoroutineScope(job + Dispatchers.IO),
-        produceFile = { File(dir, "auth_preferences.preferences_pb") },
+        produceFile = { File(dir, "$name.preferences_pb") },
     )
-    val store = LegacyAccountStore(dataStore)
+    private val dataStore = file(LegacyAccountStore.FILE_NAME)
+    private val markers = file(LegacyAccountStore.MARKER_FILE_NAME)
+    val store = LegacyAccountStore(dataStore, markers)
+
+    /** Writes the owner-unknown marker into the old file, as a build before the split did. */
+    suspend fun seedMarkerInOldFile() {
+        dataStore.updateData { it.toMutablePreferences().apply { set(LegacyAccountStore.OWNER_UNKNOWN, true) } }
+    }
+
+    /** True when the old file still holds the marker. */
+    suspend fun oldFileHasMarker(): Boolean = dataStore.data.first()[LegacyAccountStore.OWNER_UNKNOWN] == true
 
     /** Writes a token the way the earlier version did (plain text, key `github_token`). */
     suspend fun seedOldToken(value: String) {
@@ -384,10 +395,7 @@ fun completer(
     wipe = AccountDataWipe(db, mediator, beforeCommit),
     legacyIdentifier = LegacyAccountIdentifier(api, db.accountDao(), legacy, clock),
     legacyStore = legacy,
-    repositoryDao = db.repositoryDao(),
-    tagDao = db.tagDao(),
-    presetDao = db.searchPresetDao(),
-    profileDao = db.gitHubProfileDao(),
+    localData = LocalDataSummary(db.repositoryDao(), db.tagDao(), db.searchPresetDao(), db.gitHubProfileDao()),
     clock = clock,
 )
 

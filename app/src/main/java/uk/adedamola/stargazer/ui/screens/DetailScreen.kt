@@ -246,12 +246,6 @@ fun DetailScreen(
                                 StatItem("FORKS", repo.forksCount.toString(), FactoryCyan)
                                 StatItem("WATCHERS", repo.watchersCount.toString(), FactoryOrange)
 
-                                GitHubStarToggle(
-                                    state = starState,
-                                    fullName = repo.fullName,
-                                    onClick = { viewModel.toggleStar(repo) }
-                                )
-
                                 IconButton(
                                     onClick = { uriHandler.openUri(repo.htmlUrl) },
                                     modifier = Modifier
@@ -266,6 +260,16 @@ fun DetailScreen(
                                     )
                                 }
                             }
+
+                            // On its own row, so large text and big counts never squeeze it.
+                            GitHubStarToggle(
+                                state = starState,
+                                fullName = repo.fullName,
+                                onClick = { viewModel.toggleStar(repo) },
+                                modifier = Modifier
+                                    .padding(top = 12.dp)
+                                    .fillMaxWidth()
+                            )
 
                             starState.status?.let { status ->
                                 val retryable = status is StarMessage.UnstarFailed ||

@@ -16,8 +16,10 @@
 
 <!--
    Backup rules used on API 23 to 30. Everything is backed up except the directory that holds
-   the encrypted GitHub access key.
+   the encrypted GitHub access key and the earlier version's preferences file, which can still
+   hold its plain-text token until the app has checked it once.
 -->
 <full-backup-content>
     <exclude domain="file" path="access_key/"/>
+    <exclude domain="file" path="datastore/auth_preferences.preferences_pb"/>
 </full-backup-content>

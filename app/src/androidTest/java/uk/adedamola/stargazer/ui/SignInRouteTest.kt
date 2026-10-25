@@ -160,7 +160,7 @@ class SignInRouteTest {
 
         waitForText("ACCESS_DENIED")
         composeRule.onNodeWithText("ACCESS_DENIED — GitHub reports that the request was cancelled.").assertIsDisplayed()
-        composeRule.onNodeWithText("Nothing was linked. Start again when you are ready.").assertIsDisplayed()
+        composeRule.onNodeWithText("You are not signed in. Start again when you are ready.").assertIsDisplayed()
         composeRule.onNodeWithText("SIGN IN WITH GITHUB").assertIsEnabled()
     }
 

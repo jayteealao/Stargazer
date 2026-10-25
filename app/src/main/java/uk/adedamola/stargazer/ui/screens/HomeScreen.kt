@@ -1,5 +1,12 @@
 package uk.adedamola.stargazer.ui.screens
 
+import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
+import uk.adedamola.stargazer.ui.theme.FactoryCyan
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -148,6 +155,7 @@ fun HomeScreen(
 
     // Track repository states locally (favorite, pinned, tags)
     val repositoryStates = remember { mutableStateMapOf<Int, RepositoryState>() }
+    val (showUnstarHint, dismissUnstarHint) = rememberUnstarHint()
 
     var isRefreshing by remember { mutableStateOf(false) }
     var showCreateTagDialog by remember { mutableStateOf(false) }
@@ -385,6 +393,10 @@ fun HomeScreen(
                                 item(key = "in-your-stars-label") {
                                     SearchSectionLabel(sectionLabel("IN_YOUR_STARS", repositories.itemCount))
                                 }
+                            } else if (showUnstarHint && repositories.itemCount > 0) {
+                                item(key = "unstar-hint") {
+                                    UnstarHint(onDismiss = dismissUnstarHint)
+                                }
                             }
                             items(
                                 count = repositories.itemCount,
@@ -393,9 +405,11 @@ fun HomeScreen(
                                 val repo = repositories[index]
                                 if (repo != null) UnstarSwipe(
                                     repo = repo,
-                                    onUnstar = { viewModel.unstarFromSwipe(repo) },
+                                    onUnstar = {
+                                        viewModel.unstarFromSwipe(repo).also { if (it == Attempt.Sent) dismissUnstarHint() }
+                                    },
                                     modifier = Modifier.animateItem()
-                                ) {
+                                ) { unstarAction ->
                                     // Load repository state if not cached
                                     LaunchedEffect(repo.id) {
                                         if (!repositoryStates.containsKey(repo.id)) {
@@ -441,7 +455,10 @@ fun HomeScreen(
                                         },
                                         sharedTransitionScope = sharedTransitionScope,
                                         animatedVisibilityScope = animatedVisibilityScope,
+                                        // The card is the node TalkBack and Switch Access focus, so it
+                                        // carries the gesture-free unstar.
                                         modifier = Modifier
+                                            .then(unstarAction)
                                             .clickable { onRepoClick(repo.fullName, repo.id) }
                                     )
                                 }
@@ -538,7 +555,8 @@ fun HomeScreen(
 /**
  * A Home row that unstars when swiped from end to start. The card slides over an orange-bordered
  * `UNSTAR` layer with the Material default settle. A refused unstar (offline, rate limited, busy)
- * puts the card back. The same action is offered to accessibility services without the gesture.
+ * puts the card back. The same action is offered to accessibility services without the gesture:
+ * [content] gets it as a modifier for the card, the node they focus.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -546,20 +564,21 @@ private fun UnstarSwipe(
     repo: GitHubRepository,
     onUnstar: suspend () -> Attempt,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    content: @Composable (unstarAction: Modifier) -> Unit
 ) {
     val state = rememberSwipeToDismissBoxState()
     val scope = rememberCoroutineScope()
+    val unstarAction = Modifier.semantics {
+        customActions = listOf(
+            CustomAccessibilityAction("Unstar ${repo.fullName}") {
+                scope.launch { onUnstar() }
+                true
+            }
+        )
+    }
     SwipeToDismissBox(
         state = state,
-        modifier = modifier.semantics {
-            customActions = listOf(
-                CustomAccessibilityAction("Unstar ${repo.fullName}") {
-                    scope.launch { onUnstar() }
-                    true
-                }
-            )
-        },
+        modifier = modifier,
         enableDismissFromStartToEnd = false,
         onDismiss = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -594,6 +613,63 @@ private fun UnstarSwipe(
             }
         }
     ) {
-        content()
+        content(unstarAction)
     }
+}
+
+/** Shown on Home until the person unstars with a swipe or dismisses it: the swipe has no other cue. */
+@Composable
+private fun UnstarHint(onDismiss: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, FactoryOrange.copy(alpha = 0.5f), RectangleShape)
+            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Filled.StarBorder,
+            contentDescription = null,
+            tint = FactoryOrange,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = "Swipe left to unstar. Undo shows for 5 seconds.",
+            color = FactoryTextWhite,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onDismiss, modifier = Modifier.minimumInteractiveComponentSize()) {
+            Text(
+                text = "[ GOT_IT ]",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = FactoryCyan,
+                modifier = Modifier.semantics { contentDescription = "Dismiss hint" }
+            )
+        }
+    }
+}
+
+/** Per-phone memory of the one-time swipe hint; a convenience, so a failed read shows it again. */
+private const val HINTS_PREFS = "home_hints"
+private const val UNSTAR_HINT_SEEN = "unstar_hint_seen"
+
+@Composable
+private fun rememberUnstarHint(): Pair<Boolean, () -> Unit> {
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences(HINTS_PREFS, Context.MODE_PRIVATE) }
+    var show by remember { mutableStateOf(runCatching { !prefs.getBoolean(UNSTAR_HINT_SEEN, false) }.getOrDefault(true)) }
+    val dismiss = remember(prefs) {
+        {
+            if (show) {
+                show = false
+                runCatching { prefs.edit().putBoolean(UNSTAR_HINT_SEEN, true).apply() }
+            }
+        }
+    }
+    return show to dismiss
 }

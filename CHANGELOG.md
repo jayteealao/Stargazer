@@ -20,12 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updating from 1.1: sign in with GitHub once. If the app cannot tell whose starred repositories, tags and presets are on the phone, it asks whether to keep or remove them
 - The personal access token from 1.1 is deleted from the phone but stays valid on GitHub; revoke it at github.com/settings/tokens
 - Signing out deletes the key on the phone only; to remove Stargazer's access, revoke it under GitHub Settings → Applications → Authorized GitHub Apps
+- Forks: set `GITHUB_APP_CLIENT_ID` to your own GitHub App, or your users sign in to the upstream app (see `docs/github-app-setup.md`)
+- Release signing reads its four settings from an ignored `signing.properties` or the environment (see `docs/release-signing.md`)
 
 ### Removed
 - The token entry screen and the "update GitHub token" button
 
 ### Security
 - The GitHub access key is encrypted on the device, left out of backups and never logged
+- The 1.1 pasted token is left out of backups and device transfer until the app has checked and deleted it
 - Signing settings are no longer kept in the repository
 
 ## [1.1] - 2026-02-01

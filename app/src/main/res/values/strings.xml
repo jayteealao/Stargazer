@@ -30,6 +30,15 @@
         <item quantity="one">%s preset</item>
         <item quantity="other">%s presets</item>
     </plurals>
+    <!-- Change-account question: what the old account's data on the phone holds. -->
+    <plurals name="change_account_repos">
+        <item quantity="one">%s starred repo, with its favorite, pin and tags</item>
+        <item quantity="other">%s starred repos, with their favorites, pins and tags</item>
+    </plurals>
+    <plurals name="change_account_presets">
+        <item quantity="one">%s saved search preset</item>
+        <item quantity="other">%s saved search presets</item>
+    </plurals>
     <plurals name="removal_notice_count">
         <item quantity="one">%s repo to remove</item>
         <item quantity="other">%s repos to remove</item>

@@ -16,14 +16,18 @@
 
 <!--
    Backup and device-transfer rules for API 31 and later. Everything is backed up except the
-   directory that holds the encrypted GitHub access key: restored ciphertext could not be
-   decrypted without its Keystore key, so the person signs in again after a restore.
+   directory that holds the encrypted GitHub access key (restored ciphertext could not be
+   decrypted without its Keystore key, so the person signs in again after a restore) and the
+   earlier version's preferences file, which can still hold its plain-text token until the app
+   has checked it once.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="access_key/"/>
+        <exclude domain="file" path="datastore/auth_preferences.preferences_pb"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="access_key/"/>
+        <exclude domain="file" path="datastore/auth_preferences.preferences_pb"/>
     </device-transfer>
 </data-extraction-rules>

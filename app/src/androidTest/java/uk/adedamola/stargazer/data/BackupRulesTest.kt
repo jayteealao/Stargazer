@@ -9,6 +9,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.xmlpull.v1.XmlPullParser
 import uk.adedamola.stargazer.R
+import androidx.datastore.preferences.preferencesDataStoreFile
+import uk.adedamola.stargazer.data.auth.LegacyAccountStore
 import uk.adedamola.stargazer.data.di.SecureStorageModule
 import java.io.File
 
@@ -18,6 +20,13 @@ class BackupRulesTest {
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val keyRule = Rule(tag = "exclude", domain = "file", path = SecureStorageModule.KEY_DIR + "/")
+
+    /** The earlier version's preferences file, which can hold its plain-text token. */
+    private val oldTokenRule = Rule(
+        tag = "exclude",
+        domain = "file",
+        path = "datastore/${LegacyAccountStore.FILE_NAME}.preferences_pb"
+    )
 
     private data class Rule(val tag: String, val domain: String?, val path: String?)
 
@@ -46,15 +55,26 @@ class BackupRulesTest {
     }
 
     @Test
-    fun onlyTheKeyDirectoryIsExcluded() {
+    fun onlyTheKeyDirectoryAndTheOldTokenFileAreExcluded() {
         val extraction = rules(R.xml.data_extraction_rules)
         assertEquals(setOf("cloud-backup", "device-transfer"), extraction.keys)
-        assertEquals(listOf(keyRule), extraction.getValue("cloud-backup"))
-        assertEquals(listOf(keyRule), extraction.getValue("device-transfer"))
+        assertEquals(listOf(keyRule, oldTokenRule), extraction.getValue("cloud-backup"))
+        assertEquals(listOf(keyRule, oldTokenRule), extraction.getValue("device-transfer"))
 
         val fullBackup = rules(R.xml.backup_rules)
         assertEquals(setOf("full-backup-content"), fullBackup.keys)
-        assertEquals(listOf(keyRule), fullBackup.getValue("full-backup-content"))
+        assertEquals(listOf(keyRule, oldTokenRule), fullBackup.getValue("full-backup-content"))
+    }
+
+    @Test
+    fun theOldTokenFileIsTheExcludedPathAndTheMarkerFileIsNot() {
+        val datastore = File(context.filesDir, "datastore").canonicalFile
+        assertEquals(
+            File(datastore, "${LegacyAccountStore.FILE_NAME}.preferences_pb"),
+            context.preferencesDataStoreFile(LegacyAccountStore.FILE_NAME).canonicalFile
+        )
+        // The owner-unknown marker stays in backup, like the account record.
+        assertTrue(LegacyAccountStore.MARKER_FILE_NAME != LegacyAccountStore.FILE_NAME)
     }
 
     @Test

@@ -51,8 +51,10 @@ class ProfileScreenStatesTest {
     private fun loaded(profile: GitHubProfileEntity, offline: Boolean = false) =
         ProfileUiState.Loaded(profile, profile.starredCount ?: 0, offline, refreshing = false)
 
+    private var refreshes = 0
+
     private fun show(state: ProfileUiState) = check.render {
-        ProfileScreen(state = state, onBack = { backs++ }, onOpenLink = { opened += it }, onRefresh = {}, now = { now })
+        ProfileScreen(state = state, onBack = { backs++ }, onOpenLink = { opened += it }, onRefresh = { refreshes++ }, now = { now })
     }
 
     @Test
@@ -110,10 +112,15 @@ class ProfileScreenStatesTest {
         show(ProfileUiState.Error)
         check.assertShown(
             "PROFILE_UNAVAILABLE",
-            "GitHub did not return your profile, and no saved copy exists yet. Pull down to retry."
+            "GitHub did not return your profile, and no saved copy exists yet. Tap Retry.",
+            "[ RETRY ]"
         )
         check.assertTargetsInsideSafeArea()
         check.capture("profile--error")
+        // Retry needs no pull gesture.
+        composeRule.onNodeWithContentDescription("Retry").performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, refreshes)
     }
 
     @Test

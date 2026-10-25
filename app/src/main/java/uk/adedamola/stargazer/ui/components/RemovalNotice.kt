@@ -47,13 +47,15 @@ import java.text.NumberFormat
 const val REMOVAL_NOTICE_TAG = "removal-notice"
 
 /**
- * Shown once, before the first reconcile after a sign-in removes [count] repos: a bottom panel
- * over a dim scrim that the person dismisses only with CONTINUE. Back and taps outside do nothing,
+ * Shown before a reconcile removes [count] repos (the first one after a sign-in, or one whose
+ * answer looks wrong): a bottom panel over a dim scrim that the person dismisses only with the
+ * button that names the removal. Back and taps outside do nothing,
  * so nothing leaves before the person has read the count. The panel's ground reaches the bottom
  * edge; its content stays clear of the navigation bar and the cutout.
  */
 @Composable
 fun RemovalNotice(count: Int, onContinue: () -> Unit) {
+    val shown = NumberFormat.getIntegerInstance().format(count)
     val spoken = pluralStringResource(R.plurals.removal_notice_count, count, NumberFormat.getIntegerInstance().format(count))
     Dialog(
         onDismissRequest = {},
@@ -88,7 +90,7 @@ fun RemovalNotice(count: Int, onContinue: () -> Unit) {
                 DialogTitle(icon = Icons.Filled.Warning, text = TITLE)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = NumberFormat.getIntegerInstance().format(count),
+                    text = shown,
                     style = CountStyle,
                     color = FactoryYellow,
                     modifier = Modifier.semantics { contentDescription = spoken }
@@ -96,7 +98,7 @@ fun RemovalNotice(count: Int, onContinue: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 Text(text = BODY, style = BodyStyle, color = FactoryTextWhite)
                 Spacer(Modifier.height(18.dp))
-                StargazerButton(text = "CONTINUE", onClick = onContinue)
+                StargazerButton(text = "REMOVE $shown & CONTINUE", onClick = onContinue)
             }
         }
     }
@@ -104,8 +106,9 @@ fun RemovalNotice(count: Int, onContinue: () -> Unit) {
 
 private const val TITLE = "REPOS TO REMOVE"
 
-private const val BODY = "These repos are no longer readable with your GitHub link (for example private repos). " +
-    "They leave your list, with their favorites, pins and tags."
+private const val BODY = "These repos are no longer starred on your GitHub account, or are private and cannot be " +
+    "read with your GitHub sign-in. They will be removed from this phone with their favorites, pins and tags. " +
+    "This cannot be undone. Your stars on GitHub do not change."
 
 private val CountStyle = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 40.sp, lineHeight = 48.sp)
 private val BodyStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 21.sp)

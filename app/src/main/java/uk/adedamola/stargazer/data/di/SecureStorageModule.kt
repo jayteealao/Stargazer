@@ -68,15 +68,21 @@ object SecureStorageModule {
     @Provides
     fun provideAccessKeyProvider(tokenManager: TokenManager): AccessKeyProvider = tokenManager
 
-    /** The earlier version's preferences file: its old token and the data-owner-unknown marker. */
+    /**
+     * The earlier version's preferences file (its old token; excluded from backup) and the
+     * backed-up file of the data-owner-unknown marker.
+     */
     @Provides
     @Singleton
-    fun provideLegacyAccountStore(@ApplicationContext context: Context): LegacyAccountStore =
-        LegacyAccountStore(
-            PreferenceDataStoreFactory.create(
-                corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
-                scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-                produceFile = { context.preferencesDataStoreFile(LegacyAccountStore.FILE_NAME) },
-            )
+    fun provideLegacyAccountStore(@ApplicationContext context: Context): LegacyAccountStore {
+        fun store(name: String) = PreferenceDataStoreFactory.create(
+            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            produceFile = { context.preferencesDataStoreFile(name) },
         )
+        return LegacyAccountStore(
+            oldFile = store(LegacyAccountStore.FILE_NAME),
+            markers = store(LegacyAccountStore.MARKER_FILE_NAME),
+        )
+    }
 }

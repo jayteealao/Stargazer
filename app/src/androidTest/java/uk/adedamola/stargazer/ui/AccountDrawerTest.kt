@@ -141,7 +141,7 @@ class AccountDrawerTest {
     fun listsDefault() {
         drawer(selected = "L0")
         check.assertShown("ALL_LISTS", "ANDROID LIBRARIES", "48", "RUST TOOLS", "31", "READ LATER", "112", "DESIGN SYSTEMS", "9", "COMPOSE SAMPLES", "22")
-        check.assertShown("LIST: ANDROID LIBRARIES", "MATCHES:", "⭐ STAR_LISTS")
+        check.assertShown("LIST: ANDROID LIBRARIES", "MATCHES:", "STAR_LISTS")
         check.assertTargetsInsideSafeArea()
         check.capture("drawer-star-lists--default")
 

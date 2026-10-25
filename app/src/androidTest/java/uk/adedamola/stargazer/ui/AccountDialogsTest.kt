@@ -148,13 +148,13 @@ class AccountDialogsTest {
 
     @Test
     fun accountChangeDefault() {
-        render { AccountChangeDialog(old = ada, new = kofi, onContinue = {}, onCancel = {}) }
+        render { AccountChangeDialog(old = ada, new = kofi, counts = LocalDataCounts(repos = 1284, tags = 37, presets = 1), onContinue = {}, onCancel = {}) }
         assertShown(
             "CHANGE ACCOUNT",
             "Signed in as @kofi-dev. Data from @ada-builds will be removed from this phone:",
-            "– starred repos cache",
-            "– favorites, pins and tags",
-            "– saved search presets",
+            "– 1,284 starred repos, with their favorites, pins and tags",
+            "– 37 tags",
+            "– 1 saved search preset",
             "– profile and star lists",
             "FROM", "TO", "Ada Okafor", "@ada-builds", "Kofi Mensah", "@kofi-dev",
             "CANCEL", "REMOVE & CONTINUE"
@@ -168,7 +168,7 @@ class AccountDialogsTest {
 
     @Test
     fun accountChangeWorst() {
-        render { AccountChangeDialog(old = aleksandra, new = j, onContinue = {}, onCancel = {}) }
+        render { AccountChangeDialog(old = aleksandra, new = j, counts = LocalDataCounts(repos = 12_345, tags = 120, presets = 30), onContinue = {}, onCancel = {}) }
         assertShown("Signed in as @j. Data from @$longLogin will be removed from this phone:", "@j")
 
         assertTrue("the sentence wraps", layoutOf("Signed in as @j. Data from @$longLogin will be removed from this phone:").lineCount > 1)

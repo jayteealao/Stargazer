@@ -1,5 +1,11 @@
 package uk.adedamola.stargazer.ui.components
 
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -371,7 +377,8 @@ fun FilterDrawerContent(
 
         // GitHub star lists (read-only): a selected list filters Home.
         SectionHeader(
-            text = "⭐ STAR_LISTS",
+            text = "STAR_LISTS",
+            icon = Icons.AutoMirrored.Filled.List,
             isExpanded = expandedLists,
             onToggle = { expandedLists = !expandedLists }
         )
@@ -391,7 +398,8 @@ fun FilterDrawerContent(
         var showSavePresetDialog by remember { mutableStateOf(false) }
 
         SectionHeader(
-            text = "🔍 PRESETS",
+            text = "PRESETS",
+            icon = Icons.Filled.Search,
             isExpanded = expandedPresets,
             onToggle = { expandedPresets = !expandedPresets }
         )
@@ -630,27 +638,46 @@ fun FilterDrawerContent(
 private fun SectionHeader(
     text: String,
     isExpanded: Boolean = true,
-    onToggle: (() -> Unit)? = null
+    onToggle: (() -> Unit)? = null,
+    /** Drawn before the title in the header tint; decorative, the title names the section. */
+    icon: ImageVector? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = onToggle != null) { onToggle?.invoke() }
+            .clickable(
+                enabled = onToggle != null,
+                role = Role.Button,
+                onClickLabel = if (isExpanded) "Collapse" else "Expand"
+            ) { onToggle?.invoke() }
+            .then(
+                if (onToggle != null) {
+                    Modifier.semantics { stateDescription = if (isExpanded) "Expanded" else "Collapsed" }
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            color = FactoryCyan
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(imageVector = icon, contentDescription = null, tint = FactoryCyan, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = FactoryCyan
+            )
+        }
         if (onToggle != null) {
             Icon(
                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                contentDescription = null,
                 tint = FactoryCyan,
                 modifier = Modifier.size(20.dp)
             )

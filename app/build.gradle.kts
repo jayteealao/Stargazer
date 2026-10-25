@@ -44,13 +44,18 @@ android {
         }
 
         // Public client ID of the GitHub App used for device-code sign-in (no client secret exists).
-        // A fork overrides it with the Gradle property or environment variable GITHUB_APP_CLIENT_ID.
+        // A fork overrides it with the Gradle property or environment variable GITHUB_APP_CLIENT_ID;
+        // see docs/github-app-setup.md.
         val githubAppClientId = providers.gradleProperty("GITHUB_APP_CLIENT_ID")
             .orElse(providers.environmentVariable("GITHUB_APP_CLIENT_ID"))
             .orElse("Iv23lisYkUHBDnhumqsZ")
             .get()
         if (githubAppClientId.isBlank()) {
             error("GITHUB_APP_CLIENT_ID is blank: set it as a Gradle property or environment variable, or remove the empty value.")
+        }
+        // It becomes a Java string literal: letters, digits, '.', '_' and '-' only.
+        if (!Regex("^[A-Za-z0-9._-]+$").matches(githubAppClientId)) {
+            error("GITHUB_APP_CLIENT_ID has characters a GitHub App client ID never has: check the Gradle property or environment variable.")
         }
         buildConfigField("String", "GITHUB_APP_CLIENT_ID", "\"$githubAppClientId\"")
 
@@ -62,7 +67,8 @@ android {
 
     // Release signing reads SIGNING_STORE_FILE, SIGNING_STORE_PASSWORD, SIGNING_KEY_ALIAS and
     // SIGNING_KEY_PASSWORD from the git-ignored signing.properties at the repository root when it
-    // exists, else from environment variables of the same names (as CI sets them).
+    // exists, else from environment variables of the same names (as CI sets them). See
+    // docs/release-signing.md. Debug builds use the release key only when CI's environment sets it.
     val signingProperties = Properties().apply {
         val file = rootProject.file("signing.properties")
         if (file.exists()) file.inputStream().use { load(it) }
@@ -73,6 +79,13 @@ android {
         create("release") {
             val keystoreFile = signingValue("SIGNING_STORE_FILE")
             if (keystoreFile != null) {
+                // Name a missing value now, instead of a null-argument failure deep in packaging.
+                val missing = listOf("SIGNING_STORE_PASSWORD", "SIGNING_KEY_ALIAS", "SIGNING_KEY_PASSWORD")
+                    .filter { signingValue(it).isNullOrBlank() }
+                require(missing.isEmpty()) {
+                    "SIGNING_STORE_FILE is set but ${missing.joinToString()} is not: set it in signing.properties or the environment (docs/release-signing.md)."
+                }
+                // Relative to the repository root.
                 storeFile = rootProject.file(keystoreFile)
                 storePassword = signingValue("SIGNING_STORE_PASSWORD")
                 keyAlias = signingValue("SIGNING_KEY_ALIAS")
@@ -88,7 +101,9 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
         getByName("debug") {
-            if (signingValue("SIGNING_STORE_FILE") != null) {
+            // CI only: a local signing.properties never signs a developer's debug build with the
+            // release key.
+            if (System.getenv("SIGNING_STORE_FILE") != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }

@@ -2,6 +2,8 @@ package uk.adedamola.stargazer.data.star
 
 import uk.adedamola.stargazer.data.repository.AccountRepository
 import uk.adedamola.stargazer.ui.screens.HomeGitHubSearch
+import uk.adedamola.stargazer.ui.screens.HomeAccount
+import uk.adedamola.stargazer.ui.screens.HomeStarActions
 import uk.adedamola.stargazer.ui.screens.HomeRemovals
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.ExperimentalPagingApi
@@ -133,12 +135,11 @@ class GitHubSearchTest {
                 gitHubRepository = GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api),
                 organizationRepository = OrganizationRepository(db.repositoryDao(), db.tagDao(), db.repositoryTagDao(), db.searchPresetDao()),
                 accessSession = AccessSession(keys.tokenManager),
-                accounts = AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()),
                 starListRepository = StarListRepository(db.starListDao()),
-                refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L },
-                starEngine = engine,
                 searchFactory = HomeGitHubSearch.Factory(GitHubSearch(api, db.repositoryDao()), connectivity, engine),
                 removalsFactory = HomeRemovals.Factory(StarReconciler(api, db, engine)),
+                starActionsFactory = HomeStarActions.Factory(engine),
+                accountFactory = HomeAccount.Factory(AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()), StarListRepository(db.starListDao()), AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L }),
             )
         }
     }

@@ -3,25 +3,10 @@ package uk.adedamola.stargazer.data.auth
 import kotlinx.coroutines.CancellationException
 import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.local.database.AccountRecord
-import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
-import uk.adedamola.stargazer.data.local.database.RepositoryDao
-import uk.adedamola.stargazer.data.local.database.SearchPresetDao
-import uk.adedamola.stargazer.data.local.database.TagDao
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import uk.adedamola.stargazer.data.remote.model.GitHubUser
 import java.io.IOException
 import javax.inject.Inject
-
-/** A GitHub account as the account dialogs show it. [name] is null when unknown or not set. */
-data class AccountSummary(
-    val userId: Long,
-    val login: String,
-    val name: String?,
-    val avatarUrl: String?
-)
-
-/** How much local data the keep-data question is about. */
-data class LocalDataCounts(val repos: Int, val tags: Int, val presets: Int)
 
 /**
  * An approved sign-in that waits for the person's answer. The key stays in memory only: it is
@@ -35,10 +20,11 @@ sealed interface SignInOutcome {
     /** The key is stored; Home opens. */
     data object Done : SignInOutcome
 
-    /** A different GitHub account signed in; its data would replace [old]'s. */
+    /** A different GitHub account signed in; its data would replace [old]'s ([counts] of it). */
     data class AccountChange(
         val old: AccountSummary,
         val new: AccountSummary,
+        val counts: LocalDataCounts,
         val pending: PendingSignIn
     ) : SignInOutcome
 
@@ -73,10 +59,7 @@ class SignInCompleter(
     private val wipe: AccountDataWipe,
     private val legacyIdentifier: LegacyAccountIdentifier,
     private val legacyStore: LegacyAccountStore,
-    private val repositoryDao: RepositoryDao,
-    private val tagDao: TagDao,
-    private val presetDao: SearchPresetDao,
-    private val profileDao: GitHubProfileDao,
+    private val localData: LocalDataSummary,
     private val clock: () -> Long
 ) {
     @Inject
@@ -87,13 +70,9 @@ class SignInCompleter(
         wipe: AccountDataWipe,
         legacyIdentifier: LegacyAccountIdentifier,
         legacyStore: LegacyAccountStore,
-        repositoryDao: RepositoryDao,
-        tagDao: TagDao,
-        presetDao: SearchPresetDao,
-        profileDao: GitHubProfileDao
+        localData: LocalDataSummary
     ) : this(
-        api, accountDao, tokenManager, wipe, legacyIdentifier, legacyStore,
-        repositoryDao, tagDao, presetDao, profileDao, System::currentTimeMillis
+        api, accountDao, tokenManager, wipe, legacyIdentifier, legacyStore, localData, System::currentTimeMillis
     )
 
     /** The failure is IOException (offline, or the earlier version's token could not be checked) or HttpException. */
@@ -106,11 +85,12 @@ class SignInCompleter(
         val recorded = accountDao.get()
         // No record but data on the phone: an earlier version that was signed out before the
         // update left it, and nobody knows whose it is.
-        val unknownOwner = legacyStore.ownerUnknown() || (recorded == null && localCounts().isNotEmpty())
+        val counts = localData.counts()
+        val unknownOwner = legacyStore.ownerUnknown() || (recorded == null && counts.isNotEmpty())
         when {
             unknownOwner -> SignInOutcome.KeepData(
                 new = user.summary(),
-                counts = localCounts(),
+                counts = counts,
                 pending = pending
             )
             recorded == null || recorded.userId == user.id -> {
@@ -120,10 +100,10 @@ class SignInCompleter(
                 SignInOutcome.Done
             }
             else -> {
-                val profileName = profileDao.get()?.takeIf { it.userId == recorded.userId }?.name
                 SignInOutcome.AccountChange(
-                    old = AccountSummary(recorded.userId, recorded.login, profileName, recorded.avatarUrl),
+                    old = AccountSummary(recorded.userId, recorded.login, localData.profileName(recorded.userId), recorded.avatarUrl),
                     new = user.summary(),
+                    counts = counts,
                     pending = pending
                 )
             }
@@ -149,14 +129,6 @@ class SignInCompleter(
         legacyStore.setOwnerUnknown(false)
         tokenManager.saveToken(pending.key)
     }
-
-    private suspend fun localCounts() = LocalDataCounts(
-        repos = repositoryDao.getRepositoryCount(),
-        tags = tagDao.count(),
-        presets = presetDao.count()
-    )
-
-    private fun LocalDataCounts.isNotEmpty() = repos > 0 || tags > 0 || presets > 0
 
     private fun GitHubUser.record() =
         AccountRecord(userId = id, login = login, avatarUrl = avatarUrl, recordedAt = clock())

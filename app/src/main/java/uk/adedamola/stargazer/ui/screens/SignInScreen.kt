@@ -42,6 +42,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -113,6 +115,7 @@ fun SignInRoute(
         is AccountDecision.ChangeAccount -> AccountChangeDialog(
             old = decision.old,
             new = decision.new,
+            counts = decision.counts,
             onContinue = viewModel::onContinue,
             onCancel = viewModel::onCancel
         )
@@ -172,10 +175,28 @@ fun SignInScreen(
                 SignInPhase.Waiting, SignInPhase.Completing -> {
                     UserCode(code = state.userCode.orEmpty())
                     Spacer(modifier = Modifier.height(12.dp))
+                    // The one instruction on this screen: as large as the body text, not a footnote.
                     HintLine(
-                        if (phase == SignInPhase.Completing) "linking your account…"
-                        else "enter on github.com · ${formatLeft(state.secondsLeft)} left"
+                        if (phase == SignInPhase.Completing) "signing you in…"
+                        else "enter on github.com · ${formatLeft(state.secondsLeft)} left",
+                        large = true
                     )
+                    if (phase == SignInPhase.Waiting) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Start over without waiting for the code to run out.
+                        TextButton(
+                            onClick = onSignIn,
+                            enabled = state.actionEnabled,
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                        ) {
+                            Text(
+                                text = "[ NEW_CODE ]",
+                                fontFamily = FontFamily.Monospace,
+                                color = FactoryCyan,
+                                modifier = Modifier.semantics { contentDescription = "New code" }
+                            )
+                        }
+                    }
                 }
                 SignInPhase.Expired -> {
                     UserCode(code = state.userCode.orEmpty(), expired = true)
@@ -184,11 +205,11 @@ fun SignInScreen(
                 }
                 SignInPhase.Denied -> ErrorLines(
                     "ACCESS_DENIED — GitHub reports that the request was cancelled.",
-                    "Nothing was linked. Start again when you are ready."
+                    "You are not signed in. Start again when you are ready."
                 )
                 SignInPhase.Offline -> ErrorLines("NO_CONNECTION — connect to the internet to get a code.", null)
                 is SignInPhase.GitHubError -> ErrorLines(
-                    "GITHUB_ERROR — github.com did not answer. Try again in a minute.",
+                    gitHubErrorText(phase.label),
                     "code ${phase.label}"
                 )
                 SignInPhase.NoBrowser -> {
@@ -242,7 +263,11 @@ private fun PromptLine(cursor: Cursor, blinks: Boolean) {
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp,
             color = FactoryTextWhite,
-            modifier = Modifier.semantics { heading() }
+            // Read as words, without the decorative "$".
+            modifier = Modifier.semantics {
+                heading()
+                contentDescription = "link github"
+            }
         )
         if (cursor != Cursor.None) {
             Spacer(modifier = Modifier.size(width = 4.dp, height = 1.dp))
@@ -300,14 +325,29 @@ private fun UserCode(code: String, expired: Boolean = false) {
 }
 
 @Composable
-private fun HintLine(text: String) {
+private fun HintLine(text: String, large: Boolean = false) {
     Text(
         text = text,
         fontFamily = FontFamily.Monospace,
-        fontSize = 12.sp,
-        color = FactoryTextGrey,
+        fontSize = if (large) 14.sp else 12.sp,
+        lineHeight = if (large) 21.sp else 18.sp,
+        color = if (large) FactoryTextWhite else FactoryTextGrey,
         style = TextStyle(fontFeatureSettings = "tnum")
     )
+}
+
+/**
+ * The GITHUB_ERROR line for a device-code request GitHub did not accept. A busy or failing server
+ * (429, 5xx) is worth another try soon; any other refusal means the app's GitHub registration is
+ * wrong, and waiting does not help.
+ */
+internal fun gitHubErrorText(label: String): String {
+    val code = label.toIntOrNull()
+    return if (code != null && (code == 429 || code in 500..599)) {
+        "GITHUB_ERROR — github.com is having trouble. Try again in a minute."
+    } else {
+        "GITHUB_ERROR — GitHub refused this sign-in request. Update Stargazer, or report the code below."
+    }
 }
 
 @Composable
@@ -325,10 +365,18 @@ private fun StatusText(text: String, color: Color, announce: Boolean = false) {
 @Composable
 private fun IdleBody() {
     Text(
-        text = "Link your GitHub account to sync your stars, lists and profile.",
+        text = "Sign in with GitHub to sync your stars, lists and profile.",
         fontFamily = FontFamily.Monospace,
         fontSize = 16.sp,
         lineHeight = 24.sp,
+        color = FactoryTextWhite
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "You get a short code to enter on github.com.",
+        fontFamily = FontFamily.Monospace,
+        fontSize = 14.sp,
+        lineHeight = 21.sp,
         color = FactoryTextWhite
     )
     Spacer(modifier = Modifier.height(16.dp))
@@ -402,7 +450,7 @@ private fun AccessEndedBanner() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "GitHub no longer accepts this app’s access. Your stars, tags and favorites are still here. Sign in again to continue.",
+                text = "GitHub no longer accepts this app’s access. Your favorites, pins and tags are still here. Sign in again to continue.",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,

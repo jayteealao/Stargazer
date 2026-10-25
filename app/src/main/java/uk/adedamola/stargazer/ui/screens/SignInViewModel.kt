@@ -44,7 +44,7 @@ sealed interface SignInPhase {
 /** A question the person must answer before an approved sign-in finishes. */
 sealed interface AccountDecision {
     /** A different GitHub account signed in: remove [old]'s data and continue, or cancel. */
-    data class ChangeAccount(val old: AccountSummary, val new: AccountSummary) : AccountDecision
+    data class ChangeAccount(val old: AccountSummary, val new: AccountSummary, val counts: LocalDataCounts) : AccountDecision
 
     /** Nobody knows whose data is on the phone: keep it for [account], or remove it. */
     data class KeepData(val account: AccountSummary, val counts: LocalDataCounts) : AccountDecision
@@ -124,7 +124,7 @@ class SignInViewModel @Inject constructor(
                     SignInOutcome.Done -> SignInUiState()
                     is SignInOutcome.AccountChange -> {
                         pending = outcome.pending
-                        local.value.copy(decision = AccountDecision.ChangeAccount(outcome.old, outcome.new))
+                        local.value.copy(decision = AccountDecision.ChangeAccount(outcome.old, outcome.new, outcome.counts))
                     }
                     is SignInOutcome.KeepData -> {
                         pending = outcome.pending

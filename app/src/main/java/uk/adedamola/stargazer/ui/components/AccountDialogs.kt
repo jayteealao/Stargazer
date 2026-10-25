@@ -35,11 +35,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -59,8 +59,10 @@ import coil3.compose.AsyncImage
 import uk.adedamola.stargazer.R
 import uk.adedamola.stargazer.data.auth.AccountSummary
 import uk.adedamola.stargazer.data.auth.LocalDataCounts
+import uk.adedamola.stargazer.ui.theme.FactoryAvatarTints
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
+import uk.adedamola.stargazer.ui.theme.FactoryNoNameTint
 import uk.adedamola.stargazer.ui.theme.FactorySurfaceGrey
 import uk.adedamola.stargazer.ui.theme.FactoryTextGrey
 import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
@@ -80,9 +82,18 @@ const val KEEP_DATA_DIALOG_TAG = "keep-data-dialog"
 fun AccountChangeDialog(
     old: AccountSummary,
     new: AccountSummary,
+    counts: LocalDataCounts,
     onContinue: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val format = NumberFormat.getIntegerInstance()
+    // What Continue removes, with how much of it: the same set AccountDataWipe clears.
+    val wipeLines = listOf(
+        pluralStringResource(R.plurals.change_account_repos, counts.repos, format.format(counts.repos)),
+        pluralStringResource(R.plurals.keep_data_tags, counts.tags, format.format(counts.tags)),
+        pluralStringResource(R.plurals.change_account_presets, counts.presets, format.format(counts.presets)),
+        "profile and star lists"
+    )
     AccountDialogWindow(title = "CHANGE ACCOUNT", tag = ACCOUNT_CHANGE_DIALOG_TAG, onDismiss = onCancel) {
         DialogTitle(icon = Icons.Filled.Warning, text = "CHANGE ACCOUNT")
         Spacer(Modifier.height(14.dp))
@@ -98,7 +109,7 @@ fun AccountChangeDialog(
             color = FactoryTextWhite
         )
         Spacer(Modifier.height(12.dp))
-        WIPE_LINES.forEach { line ->
+        wipeLines.forEach { line ->
             Text(text = "– $line", style = ListStyle, color = FactoryTextGrey)
         }
         Spacer(Modifier.height(16.dp))
@@ -200,7 +211,7 @@ fun AccountRow(summary: AccountSummary, modifier: Modifier = Modifier) {
  */
 @Composable
 fun AccountAvatar(summary: AccountSummary, modifier: Modifier = Modifier, size: Dp = 32.dp) {
-    val tint = if (summary.name == null) NoNameTint else AvatarTints[Math.floorMod(summary.userId, AvatarTints.size.toLong()).toInt()]
+    val tint = if (summary.name == null) FactoryNoNameTint else FactoryAvatarTints[Math.floorMod(summary.userId, FactoryAvatarTints.size.toLong()).toInt()]
     Box(
         // Decorative: the name or login beside it says who it is.
         modifier = modifier.size(size).clip(CircleShape).background(tint).clearAndSetSemantics { },
@@ -282,7 +293,8 @@ internal fun DialogTitle(icon: ImageVector, text: String) {
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 0.5.sp, lineHeight = 22.sp),
-            color = FactoryTextWhite
+            color = FactoryTextWhite,
+            modifier = Modifier.semantics { heading() }
         )
     }
 }
@@ -317,7 +329,7 @@ private fun DialogActions(secondary: String, onSecondary: () -> Unit, primary: S
 }
 
 private fun AnnotatedString.Builder.bold(text: String) {
-    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) { append(text) }
+    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = FactoryTextWhite)) { append(text) }
 }
 
 /** First letters of up to two words of the name; the login's first letter when there is no name. */
@@ -331,18 +343,7 @@ internal fun initials(summary: AccountSummary): String {
     return letters.uppercase()
 }
 
-/** What Continue removes; the same set [uk.adedamola.stargazer.data.auth.AccountDataWipe] clears. */
-private val WIPE_LINES = listOf(
-    "starred repos cache",
-    "favorites, pins and tags",
-    "saved search presets",
-    "profile and star lists"
-)
-
 private val BodyStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, lineHeight = 21.sp)
 private val ListStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp)
 private val RowStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp)
 
-/** Light tints of the palette's orange, cyan and yellow, as on the boards. */
-private val AvatarTints = listOf(Color(0xFFFFB380), Color(0xFF80E5FF), Color(0xFFFFE680))
-private val NoNameTint = Color(0xFFCCCCCC)

@@ -18,7 +18,7 @@ import uk.adedamola.stargazer.data.local.di.MIGRATION_4_5
 import uk.adedamola.stargazer.data.local.di.MIGRATION_5_6
 import uk.adedamola.stargazer.data.local.di.MIGRATION_6_7
 
-/** Proves the version 5 to 6 upgrade keeps every existing row and adds the new tables. */
+/** Proves every upgrade path up to version 7 keeps every existing row and adds the new tables. */
 @RunWith(AndroidJUnit4::class)
 class DatabaseMigrationTest {
 

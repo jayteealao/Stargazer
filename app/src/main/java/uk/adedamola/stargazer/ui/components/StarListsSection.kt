@@ -26,7 +26,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -42,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import uk.adedamola.stargazer.data.local.database.StarListEntity
 import uk.adedamola.stargazer.data.repository.RefreshStatus
+import uk.adedamola.stargazer.ui.theme.FactorySkeleton
+import uk.adedamola.stargazer.ui.theme.FactoryMutedWhite
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
 import uk.adedamola.stargazer.ui.theme.FactoryTextGrey
@@ -111,7 +112,7 @@ fun StarListRow(name: String, count: Int?, selected: Boolean, onClick: () -> Uni
             onClick = null,
             colors = RadioButtonDefaults.colors(
                 selectedColor = FactoryOrange,
-                unselectedColor = Color.White.copy(alpha = 0.6f)
+                unselectedColor = FactoryMutedWhite
             ),
             modifier = Modifier.padding(horizontal = 12.dp)
         )
@@ -119,7 +120,7 @@ fun StarListRow(name: String, count: Int?, selected: Boolean, onClick: () -> Uni
         Text(
             text = name,
             style = RowText,
-            color = if (selected) Color.White else Color.White.copy(alpha = 0.6f),
+            color = if (selected) FactoryTextWhite else FactoryMutedWhite,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
@@ -145,7 +146,7 @@ fun StarListRow(name: String, count: Int?, selected: Boolean, onClick: () -> Uni
 /** Three still skeleton rows: no shimmer in a dim room. */
 @Composable
 private fun ListsLoading() {
-    val block = Color.White.copy(alpha = 0.1f)
+    val block = FactorySkeleton
     Column(
         Modifier
             .testTag("star-lists-loading")

@@ -182,12 +182,13 @@ class StarredReposRemoteMediator @Inject constructor(
 
         // The cutoff is the newest star time this sync has read from GitHub. A row starred in the
         // app carries the phone's clock, so the newest local row could skip stars made elsewhere.
-        // The local maximum is only a fallback for data synced before the cutoff was recorded.
+        // The local maximum is only a fallback for data synced before the cutoff was recorded, and
+        // it is never stored: only a star time read from GitHub becomes the next cutoff.
         val localNewestStarredAt = metadata.newestStarredAt ?: repoDao.getNewestStarredAt() ?: 0L
 
         var page = 1
         var totalLoaded = 0
-        var newestStarredAt = localNewestStarredAt
+        var newestStarredAt: Long? = metadata.newestStarredAt
         var shouldContinue = true
 
         while (shouldContinue) {
@@ -215,7 +216,7 @@ class StarredReposRemoteMediator @Inject constructor(
 
                 // Update newest starred_at if we found newer repos
                 val pageNewest = newRepos.maxOfOrNull { it.starredAt ?: 0L } ?: 0L
-                if (pageNewest > newestStarredAt) {
+                if (pageNewest > (newestStarredAt ?: 0L)) {
                     newestStarredAt = pageNewest
                 }
             }

@@ -84,7 +84,8 @@ class AccountDataRefresher(
             do {
                 val response = graphQl.starLists(GraphQlRequest.starLists(after))
                 val viewer = response.data?.viewer
-                if (!response.errors.isNullOrEmpty() || viewer?.lists == null) {
+                // Without the account id the lists cannot be matched to the signed-in account.
+                if (!response.errors.isNullOrEmpty() || viewer?.lists == null || viewer.databaseId == null) {
                     throw GraphQlFailure("GitHub did not return the star lists")
                 }
                 viewerId = viewer.databaseId

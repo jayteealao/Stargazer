@@ -12,7 +12,7 @@ appId: uk.adedamola.stargazer
 - extendedWaitUntil:
     visible: "SIGN IN WITH GITHUB"
     timeout: 20000
-- assertVisible: "Link your GitHub account to sync your stars, lists and profile."
+- assertVisible: "Sign in with GitHub to sync your stars, lists and profile."
 - takeScreenshot: ${OUT}/01-idle
 
 - tapOn: "SIGN IN WITH GITHUB"

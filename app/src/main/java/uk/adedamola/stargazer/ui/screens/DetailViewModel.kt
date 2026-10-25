@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
-import uk.adedamola.stargazer.data.repository.RepoRef
+import uk.adedamola.stargazer.data.repository.toRef
 import uk.adedamola.stargazer.data.repository.StarControlState
 import uk.adedamola.stargazer.data.repository.StarEngine
 import uk.adedamola.stargazer.data.repository.UndoOffer
@@ -51,7 +51,9 @@ class DetailViewModel @Inject constructor(
 
     /** Unstars a starred repo (with Undo) or stars it; refused taps change nothing. */
     fun toggleStar(repo: GitHubRepository) {
-        val ref = RepoRef(repo.id, repo.owner.login, repo.name)
+        val ref = repo.toRef()
+        // A refused tap (offline, rate limited) shows in the control's status line, which reads it
+        // from the engine; Home has no such line, so it reports refusals as snackbar messages.
         viewModelScope.launch {
             if (starState(repo.id).value.starred) starEngine.unstar(ref) else starEngine.star(ref, repo)
         }

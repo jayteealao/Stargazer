@@ -72,8 +72,19 @@ class ReconcileTest {
 
     /** GitHub's starred list, page by page, and its answer to star requests. */
     private var listed: (okhttp3.Request) -> Scripted? = starredPages(emptyList())
+
+    /** Repositories GitHub still stars although its list read missed them (a shifted page). */
+    private var missedButStarred: Set<Int> = emptySet()
+
+    private fun stillStarred(path: String): Boolean =
+        missedButStarred.any { path == starPath("fixture", "repo-${it - 900_000}") }
     private val network = ScriptedNetwork { request ->
-        listed(request) ?: if (request.url.encodedPath.startsWith("/user/starred/")) Scripted(204, "") else Scripted(404, "{}")
+        listed(request) ?: if (request.url.encodedPath.startsWith("/user/starred/")) {
+            // A per-repo check answers from the same list; star and unstar requests succeed.
+            if (request.method == "GET") Scripted(if (stillStarred(request.url.encodedPath)) 204 else 404, "") else Scripted(204, "")
+        } else {
+            Scripted(404, "{}")
+        }
     }
 
     @Before
@@ -266,6 +277,49 @@ class ReconcileTest {
         // That sign-in already had its first reconcile, so a later removal does not ask.
         listed = starredPages(kept.take(4))
         assertEquals(Outcome.Done(1), reconciler.reconcile())
+    }
+
+    @Test
+    fun anEmptyAnswerAfterAFinishedReconcileAsksFirst() = runBlocking<Unit> {
+        seedRepos(db, listOf(a, b, c), favorite = true, pinned = true, tagId = tagId)
+        markReconciled()
+        listed = starredPages(emptyList())
+
+        val outcome = reconciler().reconcile()
+
+        assertTrue("$outcome", outcome is Outcome.NoticeNeeded)
+        assertEquals(3, (outcome as Outcome.NoticeNeeded).count)
+        assertEquals(3, count())
+        listOf(a, b, c).forEach { assertIntact(it) }
+    }
+
+    @Test
+    fun removingMostOfALargeListAsksFirst() = runBlocking<Unit> {
+        val local = (1..120).map { 900_000 + it }
+        seedRepos(db, local, favorite = true, pinned = true, tagId = tagId)
+        markReconciled()
+        listed = starredPages(local.take(10))
+
+        val outcome = reconciler().reconcile()
+
+        assertTrue("$outcome", outcome is Outcome.NoticeNeeded)
+        assertEquals(110, (outcome as Outcome.NoticeNeeded).count)
+        assertEquals(120, count())
+    }
+
+    @Test
+    fun aRepoTheReadMissedButGitHubStillStarsStays() = runBlocking<Unit> {
+        seedRepos(db, listOf(a, b, c), favorite = true, pinned = true, tagId = tagId)
+        markReconciled()
+        listed = starredPages(listOf(a))
+        missedButStarred = setOf(c)
+
+        assertEquals(Outcome.Done(1), reconciler().reconcile())
+
+        assertGone(b)
+        assertIntact(a)
+        assertIntact(c)
+        assertEquals("one check per unlisted repo", 2, network.requests.count { it.method == "GET" && it.url.encodedPath.startsWith("/user/starred/") })
     }
 
     @Test

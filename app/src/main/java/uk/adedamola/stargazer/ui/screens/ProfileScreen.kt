@@ -40,6 +40,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +71,7 @@ import uk.adedamola.stargazer.ui.components.StargazerButton
 import uk.adedamola.stargazer.ui.theme.FactoryBorder
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
+import uk.adedamola.stargazer.ui.theme.FactorySkeletonFaint
 import uk.adedamola.stargazer.ui.theme.FactoryTextGrey
 import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
 import uk.adedamola.stargazer.ui.theme.FactoryWarnContainer
@@ -151,7 +154,7 @@ fun ProfileScreen(
                     when (state) {
                         is ProfileUiState.Loaded -> ProfileBody(state, onOpenLink, now)
                         ProfileUiState.Loading -> ProfileSkeleton()
-                        ProfileUiState.Error -> ProfileError()
+                        ProfileUiState.Error -> ProfileError(onRetry = onRefresh)
                     }
                 }
             }
@@ -275,7 +278,7 @@ private fun ProfileFact(
 /** Still blocks in the shape of the profile: no shimmer in a dim room. */
 @Composable
 private fun ProfileSkeleton() {
-    val block = Color.White.copy(alpha = 0.06f)
+    val block = FactorySkeletonFaint
     Column(
         Modifier
             .testTag("profile-loading")
@@ -294,8 +297,9 @@ private fun ProfileSkeleton() {
     }
 }
 
+/** The profile could not be read and none is saved: says so, with an on-screen Retry. */
 @Composable
-private fun ProfileError() {
+private fun ProfileError(onRetry: () -> Unit) {
     Spacer(Modifier.height(12.dp))
     Row(
         modifier = Modifier
@@ -316,12 +320,21 @@ private fun ProfileError() {
             Text(text = "PROFILE_UNAVAILABLE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = FactoryTextWhite)
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "GitHub did not return your profile, and no saved copy exists yet. Pull down to retry.",
+                text = "GitHub did not return your profile, and no saved copy exists yet. Tap Retry.",
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
                 color = FactoryTextWhite
             )
+            // Pull-to-refresh stays as a second way; this one needs no gesture.
+            TextButton(onClick = onRetry, modifier = Modifier.minimumInteractiveComponentSize()) {
+                Text(
+                    text = "[ RETRY ]",
+                    fontFamily = FontFamily.Monospace,
+                    color = FactoryCyan,
+                    modifier = Modifier.semantics { contentDescription = "Retry" }
+                )
+            }
         }
     }
 }

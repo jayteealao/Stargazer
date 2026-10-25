@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.repository.StarControlState
+import uk.adedamola.stargazer.data.repository.StarMessage
 import uk.adedamola.stargazer.ui.screens.GitHubSearchState
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryTextGrey
@@ -71,6 +72,17 @@ fun LazyListScope.gitHubSearchSection(
         is GitHubSearchState.Loaded -> {
             if (state.items.isEmpty()) {
                 item(key = "on-github-status") { StatusText("NO_OTHER_MATCHES_ON_GITHUB", FactoryTextGrey) }
+            }
+            // Why the star controls below are dim (offline, rate limited), and until when: said
+            // once in words, since a disabled control cannot be tapped to ask.
+            val blocked = state.items.firstNotNullOfOrNull { repo ->
+                controlStates[repo.id]
+                    ?.takeIf { !it.enabled && !it.inFlight }
+                    ?.status
+                    ?.takeIf { it is StarMessage.ConnectionNeeded || it is StarMessage.RateLimited }
+            }
+            if (blocked != null) {
+                item(key = "on-github-star-status") { StarStatusLine(message = blocked, onRetry = null) }
             }
             items(state.items, key = { "gh-${it.id}" }) { repo ->
                 val uriHandler = LocalUriHandler.current

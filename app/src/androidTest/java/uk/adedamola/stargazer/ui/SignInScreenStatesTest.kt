@@ -100,7 +100,8 @@ class SignInScreenStatesTest {
     fun idle() {
         render(SignInUiState())
         assertShown(
-            "Link your GitHub account to sync your stars, lists and profile.",
+            "Sign in with GitHub to sync your stars, lists and profile.",
+            "You get a short code to enter on github.com.",
             "Stargazer asks only for Starring (read and write). No access to your code.",
             "SIGN IN WITH GITHUB"
         )
@@ -119,7 +120,7 @@ class SignInScreenStatesTest {
     @Test
     fun waiting() {
         render(waiting(SignInPhase.Waiting))
-        assertShown(code, "enter on github.com · 14:32 left", "COPY CODE & OPEN GITHUB")
+        assertShown(code, "enter on github.com · 14:32 left", "[ NEW_CODE ]", "COPY CODE & OPEN GITHUB")
         assertInsideSafeArea("COPY CODE & OPEN GITHUB", hasCode = true)
         capture("sign-in--waiting")
     }
@@ -137,7 +138,7 @@ class SignInScreenStatesTest {
         render(SignInUiState(phase = SignInPhase.Denied))
         assertShown(
             "ACCESS_DENIED — GitHub reports that the request was cancelled.",
-            "Nothing was linked. Start again when you are ready.",
+            "You are not signed in. Start again when you are ready.",
             "SIGN IN WITH GITHUB"
         )
         assertInsideSafeArea("SIGN IN WITH GITHUB", hasCode = false)
@@ -155,9 +156,19 @@ class SignInScreenStatesTest {
     @Test
     fun githubError() {
         render(SignInUiState(phase = SignInPhase.GitHubError("503")))
-        assertShown("GITHUB_ERROR — github.com did not answer. Try again in a minute.", "code 503", "TRY AGAIN")
+        assertShown("GITHUB_ERROR — github.com is having trouble. Try again in a minute.", "code 503", "TRY AGAIN")
         assertInsideSafeArea("TRY AGAIN", hasCode = false)
         capture("sign-in--github-error")
+    }
+
+    @Test
+    fun githubRefusal() {
+        render(SignInUiState(phase = SignInPhase.GitHubError("device_flow_disabled")))
+        assertShown(
+            "GITHUB_ERROR — GitHub refused this sign-in request. Update Stargazer, or report the code below.",
+            "code device_flow_disabled",
+            "TRY AGAIN"
+        )
     }
 
     @Test
@@ -180,7 +191,7 @@ class SignInScreenStatesTest {
         render(SignInUiState(accessEnded = true))
         assertShown(
             "GITHUB_ACCESS_ENDED",
-            "GitHub no longer accepts this app’s access. Your stars, tags and favorites are still here. Sign in again to continue.",
+            "GitHub no longer accepts this app’s access. Your favorites, pins and tags are still here. Sign in again to continue.",
             "SIGN IN WITH GITHUB"
         )
         assertInsideSafeArea("SIGN IN WITH GITHUB", hasCode = false)

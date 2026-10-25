@@ -185,6 +185,45 @@ class StarEngineTest {
     }
 
     @Test
+    fun undoRefusedOfflineKeepsTheWindowOpenUntilItCanBeSent() = runBlocking<Unit> {
+        engine.unstar(repo1)
+        waitConfirmed()
+        connectivity.set(false)
+
+        assertEquals(Attempt.Offline, engine.undo(repo1.id))
+        gate.release() // the first window would end here
+        delay(300)
+        assertRepo1Intact()
+        assertNotNull("unstar still pending", pending())
+        assertEquals(UndoOffer(repo1.id, "fixture/repo-1"), engine.undoOffer.value)
+
+        connectivity.set(true)
+        eventually("the window starts again once online") { gate.waits >= 2 }
+        assertEquals(Attempt.Sent, engine.undo(repo1.id))
+        eventually("one PUT and the record gone") { network.calls("PUT", path1).size == 1 && pending() == null }
+        assertRepo1Intact()
+    }
+
+    @Test
+    fun undoRefusedOfflineThenWindowEndsOnceOnline() = runBlocking<Unit> {
+        engine.unstar(repo1)
+        waitConfirmed()
+        connectivity.set(false)
+        assertEquals(Attempt.Offline, engine.undo(repo1.id))
+        gate.release()
+        delay(300)
+        assertRepo1Intact()
+
+        connectivity.set(true)
+        eventually("the window starts again once online") { gate.waits >= 2 }
+        gate.release()
+
+        eventually("repo deleted after the new window") { db.repositoryDao().getRepositoryById(repo1.id) == null }
+        assertNull(pending())
+        assertNull(engine.undoOffer.value)
+    }
+
+    @Test
     fun rejectedOrFailedRestores() = runBlocking<Unit> {
         for ((answer, expected) in listOf(
             Scripted(500) to StarMessage.UnstarFailed(repo1),

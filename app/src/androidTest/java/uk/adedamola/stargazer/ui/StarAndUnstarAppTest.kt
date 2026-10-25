@@ -2,6 +2,8 @@ package uk.adedamola.stargazer.ui
 
 import uk.adedamola.stargazer.data.repository.AccountRepository
 import uk.adedamola.stargazer.ui.screens.HomeGitHubSearch
+import uk.adedamola.stargazer.ui.screens.HomeAccount
+import uk.adedamola.stargazer.ui.screens.HomeStarActions
 import uk.adedamola.stargazer.ui.screens.HomeRemovals
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedContent
@@ -155,12 +157,11 @@ class StarAndUnstarAppTest {
             gitHubRepository = GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api),
             organizationRepository = OrganizationRepository(db.repositoryDao(), db.tagDao(), db.repositoryTagDao(), db.searchPresetDao()),
             accessSession = AccessSession(keys.tokenManager),
-            accounts = AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()),
             starListRepository = StarListRepository(db.starListDao()),
-            refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L },
-            starEngine = engine,
             searchFactory = HomeGitHubSearch.Factory(GitHubSearch(api, db.repositoryDao()), connectivity, engine),
             removalsFactory = HomeRemovals.Factory(StarReconciler(api, db, engine)),
+            starActionsFactory = HomeStarActions.Factory(engine),
+            accountFactory = HomeAccount.Factory(AccountRepository(db.accountDao(), db.gitHubProfileDao(), db.repositoryDao()), StarListRepository(db.starListDao()), AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L }),
         )
         val detail = DetailViewModel(GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api), SavedStateHandle(), engine)
         check.render {
@@ -283,6 +284,20 @@ class StarAndUnstarAppTest {
 
         waitUntil("repo-2 deleted after the window") { runBlocking { db.repositoryDao().getRepositoryById(900_002) } == null }
         waitGone("UNSTARRED fixture/repo-2")
+    }
+
+    @Test
+    fun homeRowOffersUnstarWithoutTheGesture() {
+        show()
+        waitFor("repo-2")
+        // The card is the node TalkBack and Switch Access focus; the action must sit on it.
+        val actions = composeRule.onNode(hasText("repo-2")).fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
+        val unstar = actions.single { it.label == "Unstar fixture/repo-2" }
+        composeRule.runOnUiThread { unstar.action() }
+
+        waitUntil("one DELETE for the row") { network.calls("DELETE", starPath("fixture", "repo-2")).size == 1 }
+        waitGone("repo-2")
     }
 
     @Test
