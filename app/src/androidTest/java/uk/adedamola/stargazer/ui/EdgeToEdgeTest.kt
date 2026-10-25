@@ -92,7 +92,16 @@ class EdgeToEdgeTest {
             )
         }
         // Built once outside composition, so a recomposition never creates a second view model.
-        val viewModel = DetailViewModel(FakeReadmeRepository(), SavedStateHandle())
+        val viewModel = DetailViewModel(
+            FakeReadmeRepository(),
+            SavedStateHandle(),
+            uk.adedamola.stargazer.data.auth.starEngine(
+                uk.adedamola.stargazer.data.auth.inMemoryDatabase(),
+                uk.adedamola.stargazer.data.auth.ScriptedNetwork(),
+                object : uk.adedamola.stargazer.data.auth.AccessKeyProvider { override fun currentKey(): String? = null },
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+            )
+        )
         composeRule.setContent {
             StargazerTheme {
                 SharedTransitionLayout {

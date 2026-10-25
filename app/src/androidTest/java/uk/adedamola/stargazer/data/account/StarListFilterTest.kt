@@ -22,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import uk.adedamola.stargazer.data.auth.AccessSession
 import uk.adedamola.stargazer.data.auth.FIXTURE_USER_ID
+import uk.adedamola.stargazer.data.auth.FakeConnectivity
 import uk.adedamola.stargazer.data.auth.FakeList
 import uk.adedamola.stargazer.data.auth.Scripted
 import uk.adedamola.stargazer.data.auth.ScriptedNetwork
@@ -33,6 +34,7 @@ import uk.adedamola.stargazer.data.auth.graphQlApi
 import uk.adedamola.stargazer.data.auth.inMemoryDatabase
 import uk.adedamola.stargazer.data.auth.listsJson
 import uk.adedamola.stargazer.data.auth.profileJson
+import uk.adedamola.stargazer.data.auth.starEngine
 import uk.adedamola.stargazer.data.local.database.AccountRecord
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.StarListEntity
@@ -41,6 +43,7 @@ import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.repository.AccountDataRefresher
 import uk.adedamola.stargazer.data.repository.GitHubRepositoryImpl
+import uk.adedamola.stargazer.data.repository.GitHubSearch
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.StarListRepository
 import uk.adedamola.stargazer.ui.screens.HomeViewModel
@@ -103,6 +106,8 @@ class StarListFilterTest {
     fun homeFiltersByListClearsBackToAllAndDropsARemovedList() = runBlocking<Unit> {
         val api = apiService(keys.tokenManager, network)
         val refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L }
+        val connectivity = FakeConnectivity()
+        val starScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
         val viewModel = withContext(Dispatchers.Main) {
             HomeViewModel(
                 savedStateHandle = SavedStateHandle(),
@@ -113,6 +118,9 @@ class StarListFilterTest {
                 starListRepository = StarListRepository(db.starListDao()),
                 refresher = refresher,
                 profileDao = db.gitHubProfileDao(),
+                starEngine = starEngine(db, network, keys.tokenManager, starScope, connectivity),
+                gitHubSearch = GitHubSearch(api, db.repositoryDao()),
+                connectivity = connectivity,
             )
         }
         val differ = AsyncPagingDataDiffer(
@@ -164,5 +172,6 @@ class StarListFilterTest {
         assertNull(viewModel.selectedListId.value)
 
         collector.cancel()
+        starScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     }
 }
