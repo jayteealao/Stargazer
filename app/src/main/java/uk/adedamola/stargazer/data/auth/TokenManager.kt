@@ -40,6 +40,9 @@ class TokenManager(
 
     private val cacheLock = Any()
     private val conditionalClearLock = Mutex()
+    // Serializes our own writes with the store watcher, so a late store update never
+    // overwrites the key that a newer save or delete just set.
+    private val writeLock = Mutex()
     @Volatile private var cachedKey: String? = null
     @Volatile private var cacheReady = false
 
@@ -50,17 +53,19 @@ class TokenManager(
         .flowOn(Dispatchers.IO)
 
     init {
-        scope.launch { token.collect { setCache(it) } }
+        // Re-read the store under the write lock instead of trusting the emitted value,
+        // which may be older than a save or delete that completed meanwhile.
+        scope.launch { token.collect { writeLock.withLock { setCache(token.first()) } } }
     }
 
-    suspend fun saveToken(token: String) {
+    suspend fun saveToken(token: String) = writeLock.withLock {
         // Encrypt inside the edit so it is serialized with the failure path's key deletion.
         dataStore.edit { preferences -> preferences[ciphertextKey] = cipher.encrypt(token) }
         setCache(token)
     }
 
     /** Deletes the stored key. The Keystore key stays for the next sign-in. */
-    suspend fun clearToken() {
+    suspend fun clearToken() = writeLock.withLock {
         dataStore.edit { preferences -> preferences.remove(ciphertextKey) }
         setCache(null)
     }
