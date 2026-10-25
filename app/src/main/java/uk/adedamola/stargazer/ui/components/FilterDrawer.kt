@@ -63,7 +63,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import uk.adedamola.stargazer.data.auth.AccountSummary
+import uk.adedamola.stargazer.data.local.database.StarListEntity
 import uk.adedamola.stargazer.data.local.database.Tag
+import uk.adedamola.stargazer.data.repository.RefreshStatus
 import uk.adedamola.stargazer.data.repository.SortOption
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
@@ -97,13 +100,22 @@ fun FilterDrawerContent(
     onClearFilters: () -> Unit,
     onApplyFilters: () -> Unit,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    account: AccountSummary? = null,
+    starLists: List<StarListEntity> = emptyList(),
+    selectedListId: String? = null,
+    listsStatus: RefreshStatus = RefreshStatus.Idle,
+    onListSelect: (String?) -> Unit = {},
+    onListsRetry: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
     // Collapsible section states
     var expandedPresets by remember { mutableStateOf(false) }
     var expandedSort by remember { mutableStateOf(true) }
     var expandedFilters by remember { mutableStateOf(true) }
     var expandedTags by remember { mutableStateOf(false) }
+    var expandedLists by remember { mutableStateOf(true) }
+    val selectedList = starLists.find { it.id == selectedListId }
 
     Box(
         modifier = modifier
@@ -113,7 +125,8 @@ fun FilterDrawerContent(
     ) {
         // Calculate hasActiveFilters here so it's accessible throughout the Box
         val hasActiveFilters = showFavoritesOnly || showPinnedOnly || selectedTag != null ||
-                               selectedLanguage != null || (minStars != null && maxStars != null)
+                               selectedLanguage != null || (minStars != null && maxStars != null) ||
+                               selectedListId != null
 
         Column(
             modifier = Modifier
@@ -138,6 +151,13 @@ fun FilterDrawerContent(
                 fontFamily = FontFamily.Monospace,
                 color = FactoryOrange
             )
+        }
+
+        // The linked GitHub account; a tap opens the profile.
+        if (account != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            DrawerAccountHeader(account = account, onClick = onProfileClick)
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -261,6 +281,31 @@ fun FilterDrawerContent(
                         )
                     }
 
+                    if (selectedListId != null) {
+                        AssistChip(
+                            onClick = { onListSelect(null) },
+                            label = {
+                                Text(
+                                    text = "LIST: ${(selectedList?.name ?: "").uppercase()}",
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = FactoryCyan.copy(alpha = 0.2f),
+                                labelColor = FactoryCyan,
+                                trailingIconContentColor = FactoryCyan
+                            )
+                        )
+                    }
+
                     if (selectedTag != null) {
                         val tagColor = try {
                             Color(android.graphics.Color.parseColor(selectedTag.color))
@@ -322,6 +367,24 @@ fun FilterDrawerContent(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+        // GitHub star lists (read-only): a selected list filters Home.
+        SectionHeader(
+            text = "⭐ STAR_LISTS",
+            isExpanded = expandedLists,
+            onToggle = { expandedLists = !expandedLists }
+        )
+        if (expandedLists) {
+            StarListsSection(
+                lists = starLists,
+                selectedId = selectedListId,
+                status = listsStatus,
+                onSelect = onListSelect,
+                onRetry = onListsRetry
+            )
+        }
+
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
         // Search Presets Section
