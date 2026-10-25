@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -24,6 +26,7 @@ import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.auth.AccessSession
+import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.SortOption
@@ -52,7 +55,8 @@ class HomeViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository,
-    private val accessSession: AccessSession
+    private val accessSession: AccessSession,
+    accountDao: AccountDao
 ) : ViewModel() {
 
     companion object {
@@ -287,6 +291,14 @@ class HomeViewModel @Inject constructor(
     fun deletePreset(preset: SearchPreset) {
         viewModelScope.launch {
             organizationRepository.deletePreset(preset)
+        }
+    }
+
+    init {
+        // This view model outlives a sign-out. When another account's data replaces the old one,
+        // a selected tag, preset or language of the old account must not filter the new list.
+        viewModelScope.launch {
+            accountDao.observe().map { it?.userId }.distinctUntilChanged().drop(1).collect { clearAllFilters() }
         }
     }
 
