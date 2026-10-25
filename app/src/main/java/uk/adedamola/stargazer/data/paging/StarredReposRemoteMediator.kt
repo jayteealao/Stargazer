@@ -8,6 +8,7 @@ import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.RepositoryEntity
 import uk.adedamola.stargazer.data.local.database.SyncMetadata
 import uk.adedamola.stargazer.data.mappers.toEntity
+import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,7 +80,7 @@ class StarredReposRemoteMediator @Inject constructor(
         } catch (e: Exception) {
             _syncProgress.value = _syncProgress.value.copy(
                 isLoading = false,
-                error = e.message
+                error = GitHubErrorText.describe(e)
             )
             MediatorResult.Error(e)
         }

@@ -56,6 +56,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.paging.SyncPhase
+import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.ui.components.CreateTagDialog
 import uk.adedamola.stargazer.ui.components.FilterDrawerContent
 import uk.adedamola.stargazer.ui.components.RepoCard
@@ -210,6 +211,20 @@ fun HomeScreen(
                     }
                 }
 
+                // A refresh that failed over a filled list: one status line, the list stays.
+                val failedRefresh = repositories.loadState.refresh as? LoadState.Error
+                if (failedRefresh != null && repositories.itemCount > 0) {
+                    Text(
+                        text = GitHubErrorText.describe(failedRefresh.error),
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+
                 // Repository List
                 PullToRefreshBox(
                     isRefreshing = isRefreshing,
@@ -259,7 +274,7 @@ fun HomeScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "ERROR: ${error.message}",
+                                    text = GitHubErrorText.describe(error),
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.padding(16.dp)
