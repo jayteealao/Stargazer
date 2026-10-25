@@ -18,6 +18,24 @@ package uk.adedamola.stargazer
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import uk.adedamola.stargazer.data.auth.LegacyAccountIdentifier
+import javax.inject.Inject
 
 @HiltAndroidApp
-class Stargazer : Application()
+class Stargazer : Application() {
+
+    @Inject
+    lateinit var legacyIdentifier: LegacyAccountIdentifier
+
+    override fun onCreate() {
+        super.onCreate()
+        // An update from the pasted-token version: learn whose data is on the phone, once.
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { legacyIdentifier.identify() }
+        }
+    }
+}
