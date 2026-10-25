@@ -3,7 +3,9 @@ package uk.adedamola.stargazer.data.local.database
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -39,4 +41,17 @@ interface GitHubProfileDao {
 
     @Query("DELETE FROM github_profile")
     suspend fun deleteAll()
+
+    @Insert
+    suspend fun insert(profile: GitHubProfileEntity)
+
+    /** Keeps exactly one row, so the single-row reads stay right. */
+    @Transaction
+    suspend fun replace(profile: GitHubProfileEntity) {
+        deleteAll()
+        insert(profile)
+    }
+
+    @Query("UPDATE github_profile SET starredCount = :count WHERE userId = :userId")
+    suspend fun updateStarredCount(userId: Long, count: Int)
 }
