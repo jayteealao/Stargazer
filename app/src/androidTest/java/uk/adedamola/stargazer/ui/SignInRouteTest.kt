@@ -30,7 +30,8 @@ import uk.adedamola.stargazer.data.auth.FIXTURE_DEVICE_CODE
 import uk.adedamola.stargazer.data.auth.FIXTURE_USER_CODE
 import uk.adedamola.stargazer.data.auth.FakeDeviceFlowApi
 import uk.adedamola.stargazer.data.auth.ScriptedNetwork
-import uk.adedamola.stargazer.data.auth.SignInCompleter
+import uk.adedamola.stargazer.data.auth.LegacyStoreFixture
+import uk.adedamola.stargazer.data.auth.completer
 import uk.adedamola.stargazer.data.auth.TokenManagerFixture
 import uk.adedamola.stargazer.data.auth.answer
 import uk.adedamola.stargazer.data.auth.apiService
@@ -52,6 +53,7 @@ class SignInRouteTest {
     private lateinit var keys: TokenManagerFixture
     private lateinit var db: AppDatabase
     private lateinit var session: AccessSession
+    private val legacy = LegacyStoreFixture()
     private val api = FakeDeviceFlowApi(expiresIn = 900, interval = 1)
     private val opened = CopyOnWriteArrayList<Uri>()
     private var browserFound = true
@@ -67,6 +69,7 @@ class SignInRouteTest {
     fun tearDown() {
         db.close()
         keys.close()
+        legacy.close()
     }
 
     private fun show() {
@@ -79,7 +82,7 @@ class SignInRouteTest {
         // Built once outside composition, so a recomposition never creates a second view model.
         val viewModel = SignInViewModel(
             DeviceFlowSignIn(api, "Iv-test-client"),
-            SignInCompleter(apiService(keys.tokenManager, ScriptedNetwork(), session), db.accountDao(), keys.tokenManager),
+            completer(db, keys.tokenManager, apiService(keys.tokenManager, ScriptedNetwork(), session), legacy.store),
             session
         )
         composeRule.setContent {

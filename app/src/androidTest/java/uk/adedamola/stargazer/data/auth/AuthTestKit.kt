@@ -1,6 +1,10 @@
 package uk.adedamola.stargazer.data.auth
 
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.paging.ExperimentalPagingApi
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
@@ -20,11 +24,15 @@ import uk.adedamola.stargazer.data.di.NetworkModule
 import uk.adedamola.stargazer.data.di.SecureStorageModule
 import uk.adedamola.stargazer.data.local.database.AccountRecord
 import uk.adedamola.stargazer.data.local.database.AppDatabase
+import uk.adedamola.stargazer.data.local.database.GitHubProfileEntity
 import uk.adedamola.stargazer.data.local.database.RepositoryEntity
 import uk.adedamola.stargazer.data.local.database.RepositoryTag
 import uk.adedamola.stargazer.data.local.database.SearchPreset
+import uk.adedamola.stargazer.data.local.database.StarListEntity
+import uk.adedamola.stargazer.data.local.database.StarListItemEntity
 import uk.adedamola.stargazer.data.local.database.SyncMetadata
 import uk.adedamola.stargazer.data.local.database.Tag
+import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import java.io.File
 import java.io.IOException
@@ -148,24 +156,99 @@ fun inMemoryDatabase(): AppDatabase =
 
 const val FIXTURE_USER_ID = 5901851L
 
-/** Seeds an account, three repos, a tag with one assignment, a preset and a sync row. */
+/** A second, different GitHub account for the account-change tests. */
+const val SECOND_USER_ID = 7713002L
+
+/** A `GET /user` answer. */
+fun userJson(id: Long, login: String, name: String? = null): String =
+    """{"id":$id,"login":"$login","avatar_url":"https://avatars.example/$id.png","name":${name?.let { "\"$it\"" } ?: "null"}}"""
+
+/**
+ * Seeds an account, three repos (one favorite, one pinned), a tag with one assignment, a preset,
+ * a sync row, the cached profile and a star list with one item.
+ */
 suspend fun seedLocalData(db: AppDatabase) {
     db.accountDao().replace(AccountRecord(FIXTURE_USER_ID, "fixture-login", "https://avatars.example/u.png", 1L))
     @Suppress("DEPRECATION") // sdlc-debt: test seed uses the deprecated insert-or-replace DAO call (ceiling: test-only; upgrade path: an upsert helper if the DAO drops it)
     db.repositoryDao().insertRepositories((1..3).map(::fixtureRepo))
+    db.repositoryDao().updateFavorite(900_001, true)
+    db.repositoryDao().updatePinned(900_002, true)
     val tagId = db.tagDao().insertTag(Tag(name = "kept", color = "#FF6600")).toInt()
     db.repositoryTagDao().addTagToRepository(RepositoryTag(repositoryId = 900_001, tagId = tagId))
     db.searchPresetDao().insertPreset(
         SearchPreset(name = "kept", sortBy = "stars", filterLanguage = null, filterMinStars = null, filterMaxStars = null, searchQuery = null)
     )
     db.syncMetadataDao().updateMetadata(SyncMetadata(dataType = "starred_repos", isInitialSyncComplete = true))
+    db.gitHubProfileDao().upsert(
+        GitHubProfileEntity(
+            userId = FIXTURE_USER_ID, login = "fixture-login", name = "Fixture Person", avatarUrl = "",
+            bio = null, followers = 1, following = 2, publicRepos = 3, starredCount = 3, location = null,
+            company = null, blog = null, htmlUrl = "https://github.com/fixture-login", fetchedAt = 1L
+        )
+    )
+    db.starListDao().upsertLists(listOf(StarListEntity("list-1", "kept", null, false, 1, 0, 1L)))
+    db.starListDao().upsertItems(listOf(StarListItemEntity("list-1", 900_001L)))
 }
 
-/** Row counts of every table that local data lives in. */
+/** Every table that holds account-derived data (the wipe set); `account` is the record itself. */
+val WIPE_TABLES = listOf(
+    "repositories", "tags", "repository_tags", "search_presets", "sync_metadata",
+    "github_profile", "star_lists", "star_list_items"
+)
+
+/** Row counts of the account record and every table that local data lives in. */
 fun localCounts(db: AppDatabase): Map<String, Int> =
-    listOf("account", "repositories", "tags", "repository_tags", "search_presets", "sync_metadata").associateWith { table ->
+    (listOf("account") + WIPE_TABLES).associateWith { table ->
         db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table").use { c -> c.moveToFirst(); c.getInt(0) }
     }
+
+/** A [LegacyAccountStore] over a temporary file, standing in for the earlier version's preferences. */
+class LegacyStoreFixture {
+    private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val dir = File(context.cacheDir, "legacy-" + UUID.randomUUID()).apply { mkdirs() }
+    private val job = SupervisorJob()
+    private val dataStore = PreferenceDataStoreFactory.create(
+        corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+        scope = CoroutineScope(job + Dispatchers.IO),
+        produceFile = { File(dir, "auth_preferences.preferences_pb") },
+    )
+    val store = LegacyAccountStore(dataStore)
+
+    /** Writes a token the way the earlier version did (plain text, key `github_token`). */
+    suspend fun seedOldToken(value: String) {
+        dataStore.updateData { it.toMutablePreferences().apply { set(LegacyAccountStore.OLD_TOKEN, value) } }
+    }
+
+    fun close() = runBlocking {
+        job.cancelAndJoin()
+        dir.deleteRecursively()
+        Unit
+    }
+}
+
+/** The production sign-in completion over an in-memory database, a temp key store and [api]. */
+@OptIn(ExperimentalPagingApi::class)
+fun completer(
+    db: AppDatabase,
+    tokenManager: TokenManager,
+    api: GitHubApiService,
+    legacy: LegacyAccountStore,
+    mediator: StarredReposRemoteMediator = StarredReposRemoteMediator(api, db),
+    beforeCommit: suspend () -> Unit = {},
+    clock: () -> Long = { 42L },
+): SignInCompleter = SignInCompleter(
+    api = api,
+    accountDao = db.accountDao(),
+    tokenManager = tokenManager,
+    wipe = AccountDataWipe(db, mediator, beforeCommit),
+    legacyIdentifier = LegacyAccountIdentifier(api, db.accountDao(), legacy, clock),
+    legacyStore = legacy,
+    repositoryDao = db.repositoryDao(),
+    tagDao = db.tagDao(),
+    presetDao = db.searchPresetDao(),
+    profileDao = db.gitHubProfileDao(),
+    clock = clock,
+)
 
 fun fixtureRepo(n: Int) = RepositoryEntity(
     id = 900_000 + n,
