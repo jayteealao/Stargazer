@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Synchronous read of the current access key, for the HTTP layer. */
 interface AccessKeyProvider {
@@ -37,6 +39,7 @@ class TokenManager(
     private val ciphertextKey = byteArrayPreferencesKey("ciphertext")
 
     private val cacheLock = Any()
+    private val conditionalClearLock = Mutex()
     @Volatile private var cachedKey: String? = null
     @Volatile private var cacheReady = false
 
@@ -60,6 +63,17 @@ class TokenManager(
     suspend fun clearToken() {
         dataStore.edit { preferences -> preferences.remove(ciphertextKey) }
         setCache(null)
+    }
+
+    /**
+     * Deletes the stored key only while it still equals [expected], and reports whether this
+     * call deleted it. Concurrent callers with the same key see `true` once; a key saved after
+     * [expected] was read is never removed.
+     */
+    suspend fun clearTokenIf(expected: String): Boolean = conditionalClearLock.withLock {
+        if (currentKey() != expected) return@withLock false
+        clearToken()
+        true
     }
 
     suspend fun hasToken(): Boolean = token.first() != null
