@@ -1,0 +1,24 @@
+# Reads the signed-in account's real profile and star lists, after the account owner has
+# approved a sign-in code (maestro/sign-in-approve.yaml). Read only: it touches no star
+# control and types nothing.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/profile-and-lists-live.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "STARGAZER"
+    timeout: 60000
+- tapOn: "Open menu"
+- extendedWaitUntil:
+    visible: "ALL_LISTS"
+    timeout: 60000
+- takeScreenshot: ${OUT}/ac-26-lists
+- tapOn:
+    text: "@.+"
+    index: 0
+- extendedWaitUntil:
+    visible: "OPEN ON GITHUB"
+    timeout: 30000
+- takeScreenshot: ${OUT}/ac-24-profile
+- back
