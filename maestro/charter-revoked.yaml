@@ -1,0 +1,55 @@
+# Access ended on github.com, then the same account signs in again and keeps its data.
+#
+# Before this flow, the account owner revokes the app on github.com (Settings > Applications >
+# Authorized GitHub Apps). The flow refreshes Home, which GitHub now rejects, and the app
+# returns to sign-in with the access-ended notice. The account owner then approves a new code
+# with the same account (in the browser tab or on another device); this flow types nothing
+# into GitHub and waits up to 15 minutes. Home must show the local repos again with no
+# question about removing data.
+#
+# The app state is kept: unlike maestro/sign-in.yaml, this flow never clears it.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/charter-revoked.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Open menu|SIGN IN WITH GITHUB"
+    timeout: 60000
+
+# Pull to refresh when Home is still showing; the launch refresh may already have ended access.
+- runFlow:
+    when:
+      visible: "Open menu"
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 600
+
+- extendedWaitUntil:
+    visible: "GITHUB_ACCESS_ENDED"
+    timeout: 60000
+- assertVisible: "SIGN IN WITH GITHUB"
+- takeScreenshot: ${OUT}/charter-access-ended
+
+# The same account signs in again.
+- tapOn: "SIGN IN WITH GITHUB"
+- extendedWaitUntil:
+    visible: "COPY CODE & OPEN GITHUB"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "[A-Z0-9]{4}-[A-Z0-9]{4}"
+    timeout: 20000
+- tapOn: "COPY CODE & OPEN GITHUB"
+- extendedWaitUntil:
+    visible: "Open menu"
+    timeout: 900000
+
+# Same account: no removal question, and the local repos are still there.
+- assertNotVisible: "REMOVE & CONTINUE"
+- assertNotVisible: "KEEP LOCAL DATA?"
+- extendedWaitUntil:
+    visible: "★ .*"
+    timeout: 30000
+- takeScreenshot: ${OUT}/charter-revoked-home
