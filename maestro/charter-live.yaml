@@ -4,7 +4,8 @@
 # Needs a signed-in account with at least one star list. On a real GitHub account, the
 # account owner first approves a sign-in code (maestro/sign-in-approve.yaml). The flow
 # touches no star control and types nothing; it picks the first list by position, so it
-# runs on any account. At the end it clears the list filter again.
+# runs on any account. At the end it clears the list filter again. It opens the star lists
+# section when it starts folded.
 #
 # Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/charter-live.yaml
 appId: uk.adedamola.stargazer
@@ -16,6 +17,21 @@ appId: uk.adedamola.stargazer
 
 # The drawer: account header and star lists.
 - tapOn: "Open menu"
+- extendedWaitUntil:
+    visible: "STAR_LISTS"
+    timeout: 60000
+# More than four lists start folded: open the section, and tap again if a tap landed while
+# the lists were still loading.
+- repeat:
+    while:
+      notVisible: "ALL_LISTS"
+    times: 4
+    commands:
+      - tapOn: "STAR_LISTS"
+      - extendedWaitUntil:
+          visible: "ALL_LISTS"
+          timeout: 15000
+          optional: true
 - extendedWaitUntil:
     visible: "ALL_LISTS"
     timeout: 60000
