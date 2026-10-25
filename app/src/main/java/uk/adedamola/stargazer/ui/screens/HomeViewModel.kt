@@ -26,7 +26,13 @@ import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.auth.AccessSession
+import uk.adedamola.stargazer.data.auth.AccountSummary
 import uk.adedamola.stargazer.data.local.database.AccountDao
+import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
+import uk.adedamola.stargazer.data.local.database.StarListEntity
+import uk.adedamola.stargazer.data.repository.AccountDataRefresher
+import uk.adedamola.stargazer.data.repository.RefreshStatus
+import uk.adedamola.stargazer.data.repository.StarListRepository
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.SortOption
@@ -46,7 +52,8 @@ private data class FilterState(
     val maxStars: Int?,
     val favoritesOnly: Boolean,
     val pinnedOnly: Boolean,
-    val tagId: Int?
+    val tagId: Int?,
+    val listId: String?
 )
 
 @OptIn(FlowPreview::class)
@@ -56,7 +63,10 @@ class HomeViewModel @Inject constructor(
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository,
     private val accessSession: AccessSession,
-    accountDao: AccountDao
+    accountDao: AccountDao,
+    private val starListRepository: StarListRepository,
+    private val refresher: AccountDataRefresher,
+    profileDao: GitHubProfileDao
 ) : ViewModel() {
 
     companion object {
@@ -97,6 +107,28 @@ class HomeViewModel @Inject constructor(
 
     private val _selectedTagId = MutableStateFlow<Int?>(null)
     val selectedTagId: StateFlow<Int?> = _selectedTagId.asStateFlow()
+
+    private val _selectedListId = MutableStateFlow<String?>(null)
+    val selectedListId: StateFlow<String?> = _selectedListId.asStateFlow()
+
+    /** The account's GitHub star lists, as last cached (read-only). */
+    val starLists: StateFlow<List<StarListEntity>> = starListRepository.observeLists()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val listsStatus: StateFlow<RefreshStatus> = refresher.listsStatus
+
+    /**
+     * The signed-in account for the drawer header: the cached profile, else the account record
+     * (login and avatar), so the header shows right after sign-in.
+     */
+    val account: StateFlow<AccountSummary?> = combine(profileDao.observe(), accountDao.observe()) { profile, record ->
+        when {
+            record == null -> null
+            profile != null && profile.userId == record.userId ->
+                AccountSummary(profile.userId, profile.login, profile.name, profile.avatarUrl)
+            else -> AccountSummary(record.userId, record.login, null, record.avatarUrl)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _minStars = MutableStateFlow<Int?>(null)
     val minStars: StateFlow<Int?> = _minStars.asStateFlow()
@@ -141,7 +173,8 @@ class HomeViewModel @Inject constructor(
         _maxStars,
         _showFavoritesOnly,
         _showPinnedOnly,
-        _selectedTagId
+        _selectedTagId,
+        _selectedListId
     ) { flows: Array<Any?> ->
         FilterState(
             query = flows[0] as String,
@@ -151,7 +184,8 @@ class HomeViewModel @Inject constructor(
             maxStars = flows[4] as Int?,
             favoritesOnly = flows[5] as Boolean,
             pinnedOnly = flows[6] as Boolean,
-            tagId = flows[7] as Int?
+            tagId = flows[7] as Int?,
+            listId = flows[8] as String?
         )
     }.flatMapLatest { filterState ->
         when {
@@ -163,6 +197,9 @@ class HomeViewModel @Inject constructor(
             }
             filterState.tagId != null -> {
                 organizationRepository.getRepositoriesWithTagPaging(filterState.tagId)
+            }
+            filterState.listId != null -> {
+                starListRepository.repositoriesInListPaging(filterState.listId)
             }
             filterState.query.isNotBlank() -> {
                 gitHubRepository.searchRepositoriesPaging(filterState.query)
@@ -186,6 +223,17 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             gitHubRepository.refreshStarredRepositories()
         }
+        refreshAccountData()
+    }
+
+    /** Refreshes the profile and the star lists on their own, so the starred list never waits. */
+    fun refreshAccountData() {
+        viewModelScope.launch { refresher.refresh() }
+    }
+
+    /** Filters Home to one GitHub star list; null shows every starred repo. */
+    fun filterByList(listId: String?) {
+        _selectedListId.value = listId
     }
 
     fun onSearchQueryChange(query: String) {
@@ -298,8 +346,20 @@ class HomeViewModel @Inject constructor(
         // This view model outlives a sign-out. When another account's data replaces the old one,
         // a selected tag, preset or language of the old account must not filter the new list.
         viewModelScope.launch {
-            accountDao.observe().map { it?.userId }.distinctUntilChanged().drop(1).collect { clearAllFilters() }
+            accountDao.observe().map { it?.userId }.distinctUntilChanged().drop(1).collect {
+                clearAllFilters()
+                refreshAccountData()
+            }
         }
+        // A list that a refresh removed can no longer filter Home.
+        viewModelScope.launch {
+            starListRepository.observeLists().collect { lists ->
+                val selected = _selectedListId.value
+                if (selected != null && lists.none { it.id == selected }) _selectedListId.value = null
+            }
+        }
+        // Home loads: bring the profile and the lists up to date.
+        refreshAccountData()
     }
 
     fun clearAllFilters() {
@@ -311,6 +371,7 @@ class HomeViewModel @Inject constructor(
         _showFavoritesOnly.value = false
         _showPinnedOnly.value = false
         _selectedTagId.value = null
+        _selectedListId.value = null
         _sortOption.value = SortOption.STARRED
     }
 
