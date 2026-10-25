@@ -69,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uk.adedamola.stargazer.data.auth.AccountSummary
 import uk.adedamola.stargazer.data.local.database.StarListEntity
@@ -78,6 +79,7 @@ import uk.adedamola.stargazer.data.repository.SortOption
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
+import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
 import uk.adedamola.stargazer.ui.theme.FactoryYellow
 import kotlin.math.roundToInt
 
@@ -386,7 +388,9 @@ fun FilterDrawerContent(
             text = "STAR_LISTS",
             icon = Icons.AutoMirrored.Filled.List,
             isExpanded = expandedLists,
-            onToggle = { listsChoice = !expandedLists }
+            onToggle = { listsChoice = !expandedLists },
+            // While folded, the header names the selected list so the choice stays visible.
+            detail = if (!expandedLists) selectedList?.name?.uppercase() else null
         )
         if (expandedLists) {
             StarListsSection(
@@ -646,7 +650,9 @@ private fun SectionHeader(
     isExpanded: Boolean = true,
     onToggle: (() -> Unit)? = null,
     /** Drawn before the title in the header tint; decorative, the title names the section. */
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    /** Short text after the title, one line with an ellipsis; the expand icon always stays visible. */
+    detail: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -667,7 +673,7 @@ private fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
                 Icon(imageVector = icon, contentDescription = null, tint = FactoryCyan, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -679,6 +685,17 @@ private fun SectionHeader(
                 fontWeight = FontWeight.Bold,
                 color = FactoryCyan
             )
+            if (detail != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = FactoryTextWhite,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         if (onToggle != null) {
             Icon(
