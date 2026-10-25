@@ -102,6 +102,9 @@ class StarEngine(
     private val locks = ConcurrentHashMap<Int, Mutex>()
     private val windowJobs = ConcurrentHashMap<Int, Job>()
 
+    /** When each repository was last starred, unstarred or restored here (clock millis). */
+    private val touched = ConcurrentHashMap<Int, Long>()
+
     private val _inFlight = MutableStateFlow<Set<Int>>(emptySet())
     val inFlight: StateFlow<Set<Int>> = _inFlight.asStateFlow()
 
@@ -146,6 +149,7 @@ class StarEngine(
     /** Unstars [ref]: the DELETE goes out now and the repository leaves Home now (AC-29). */
     suspend fun unstar(ref: RepoRef): Attempt {
         refusal(ref.id)?.let { return it }
+        touch(ref.id)
         val lock = lockFor(ref.id)
         if (!lock.tryLock()) return Attempt.Busy
         try {
@@ -188,6 +192,7 @@ class StarEngine(
      */
     suspend fun undo(repoId: Int): Attempt {
         refusal(repoId)?.let { return it }
+        touch(repoId)
         val lock = lockFor(repoId)
         scope.launch {
             lock.withLock {
@@ -216,6 +221,7 @@ class StarEngine(
      */
     suspend fun star(ref: RepoRef, repo: GitHubRepository?): Attempt {
         refusal(ref.id)?.let { return it }
+        touch(ref.id)
         if (pendingDao.get(ref.id) != null) return undo(ref.id)
         val lock = lockFor(ref.id)
         if (!lock.tryLock()) return Attempt.Busy
@@ -334,6 +340,16 @@ class StarEngine(
     private fun clearFailure(repoId: Int) = _lastFailure.update { it - repoId }
 
     private fun clearOffer(repoId: Int) = _undoOffer.update { if (it?.repoId == repoId) null else it }
+
+    /**
+     * Repositories starred, unstarred or restored here at or after [since] (clock millis). A bulk
+     * removal that read GitHub's list before such a change leaves these repositories alone.
+     */
+    fun touchedSince(since: Long): Set<Int> = touched.filterValues { it >= since }.keys.toSet()
+
+    private fun touch(repoId: Int) {
+        touched[repoId] = clock()
+    }
 
     private fun lockFor(repoId: Int): Mutex = locks.getOrPut(repoId) { Mutex() }
 
