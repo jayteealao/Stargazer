@@ -1,0 +1,61 @@
+# Screens behind the system bars: captures Home, the filter drawer, the save-preset
+# dialog, the tag sheet, the create-tag dialog and Detail, so each can be checked for
+# content under the status bar, the navigation bar or the camera cutout.
+#
+# Needs Home to open with starred repos and no GitHub account: run the instrumented
+# fixture seed first (EdgeToEdgeFixtureSeed with -e seedFixture true) and keep the
+# emulator in airplane mode while the fixture is stored.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/edge-to-edge.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "STARGAZER"
+    timeout: 20000
+- assertVisible: "repo-01"
+- takeScreenshot: ${OUT}/home
+
+- tapOn: "Open menu"
+- assertVisible: "STARGAZER_SYSTEM"
+- takeScreenshot: ${OUT}/drawer-top
+- assertVisible: "\\[ DISCONNECT_SESSION \\]"
+- takeScreenshot: ${OUT}/drawer-footer
+
+- runFlow:
+    when:
+      notVisible: "SAVE_CURRENT"
+    commands:
+      - tapOn: "🔍 PRESETS"
+- tapOn: "SAVE_CURRENT"
+- assertVisible: "SAVE_PRESET"
+- takeScreenshot: ${OUT}/dialog-save-preset
+- tapOn: "CANCEL"
+- tapOn: "APPLY_FILTERS"
+- extendedWaitUntil:
+    notVisible: "STARGAZER_SYSTEM"
+    timeout: 5000
+- tapOn:
+    text: "\\+ Add Tags"
+    index: 0
+- assertVisible: "MANAGE TAGS"
+- takeScreenshot: ${OUT}/tag-sheet
+- tapOn: "CREATE NEW TAG"
+- assertVisible: "CREATE_NEW_TAG"
+- takeScreenshot: ${OUT}/dialog-create-tag
+- tapOn: "CANCEL"
+- runFlow:
+    when:
+      visible: "MANAGE TAGS"
+    commands:
+      - back
+- extendedWaitUntil:
+    visible: "repo-01"
+    timeout: 5000
+
+- tapOn: "repo-01"
+- extendedWaitUntil:
+    visible: "fixture/repo-01|repo-01"
+    timeout: 10000
+- takeScreenshot: ${OUT}/detail
+- back
