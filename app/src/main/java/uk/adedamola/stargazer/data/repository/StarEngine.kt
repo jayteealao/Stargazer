@@ -275,7 +275,11 @@ class StarEngine(
     private suspend fun send(repoId: Int, call: suspend () -> Response<Unit>): kotlin.Result<Response<Unit>> {
         _inFlight.update { it + repoId }
         return try {
-            runCatching { call() }
+            kotlin.Result.success(call())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // the process is going away: leave the record for resumePending()
+        } catch (e: Exception) {
+            kotlin.Result.failure(e)
         } finally {
             _inFlight.update { it - repoId }
         }
