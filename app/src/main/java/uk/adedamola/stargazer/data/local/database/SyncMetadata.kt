@@ -30,4 +30,7 @@ interface SyncMetadataDao {
 
     @Query("DELETE FROM sync_metadata WHERE dataType = :dataType")
     suspend fun deleteMetadata(dataType: String)
+
+    @Query("DELETE FROM sync_metadata")
+    suspend fun deleteAll()
 }

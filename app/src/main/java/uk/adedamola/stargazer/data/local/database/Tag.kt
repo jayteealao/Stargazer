@@ -37,4 +37,10 @@ interface TagDao {
 
     @Query("SELECT * FROM tags WHERE name = :name")
     suspend fun getTagByName(name: String): Tag?
+
+    @Query("SELECT COUNT(*) FROM tags")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM tags")
+    suspend fun deleteAll()
 }

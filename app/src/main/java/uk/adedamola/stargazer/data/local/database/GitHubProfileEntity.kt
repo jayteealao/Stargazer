@@ -31,6 +31,9 @@ interface GitHubProfileDao {
     @Query("SELECT * FROM github_profile LIMIT 1")
     fun observe(): Flow<GitHubProfileEntity?>
 
+    @Query("SELECT * FROM github_profile LIMIT 1")
+    suspend fun get(): GitHubProfileEntity?
+
     @Upsert
     suspend fun upsert(profile: GitHubProfileEntity)
 

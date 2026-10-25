@@ -43,4 +43,10 @@ interface SearchPresetDao {
 
     @Query("DELETE FROM search_presets WHERE id = :id")
     suspend fun deletePresetById(id: Int)
+
+    @Query("SELECT COUNT(*) FROM search_presets")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM search_presets")
+    suspend fun deleteAll()
 }
