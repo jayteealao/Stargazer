@@ -14,6 +14,7 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
 import uk.adedamola.stargazer.ui.screens.DetailScreen
 import uk.adedamola.stargazer.ui.screens.HomeScreen
+import uk.adedamola.stargazer.ui.screens.ProfileRoute
 import uk.adedamola.stargazer.ui.screens.SignInRoute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -30,6 +31,7 @@ sealed interface Screen {
     data object SignIn : Screen
     data object Home : Screen
     data class Detail(val repoName: String, val repoId: Int) : Screen
+    data object Profile : Screen
 }
 
 sealed interface AuthState {
@@ -84,8 +86,12 @@ fun StargazerApp(
                             backStack.add(Screen.Detail(repoName, repoId))
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = LocalNavAnimatedContentScope.current
+                        animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                        onProfileClick = { backStack.add(Screen.Profile) }
                     )
+                }
+                entry<Screen.Profile> {
+                    ProfileRoute(onBack = { backStack.removeLastOrNull() })
                 }
                 entry<Screen.Detail> { key ->
                     DetailScreen(
