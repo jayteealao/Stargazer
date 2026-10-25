@@ -62,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +80,9 @@ import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
 import uk.adedamola.stargazer.ui.theme.FactoryYellow
 import kotlin.math.roundToInt
+
+/** Up to this many star lists, the STAR_LISTS section starts open; above it, folded. */
+private const val STAR_LISTS_OPEN_MAX = 4
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -120,7 +124,9 @@ fun FilterDrawerContent(
     var expandedSort by remember { mutableStateOf(true) }
     var expandedFilters by remember { mutableStateOf(true) }
     var expandedTags by remember { mutableStateOf(false) }
-    var expandedLists by remember { mutableStateOf(true) }
+    // null until the person taps the header; until then the list count decides.
+    var listsChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val expandedLists = listsChoice ?: (starLists.size <= STAR_LISTS_OPEN_MAX)
     val selectedList = starLists.find { it.id == selectedListId }
 
     Box(
@@ -380,7 +386,7 @@ fun FilterDrawerContent(
             text = "STAR_LISTS",
             icon = Icons.AutoMirrored.Filled.List,
             isExpanded = expandedLists,
-            onToggle = { expandedLists = !expandedLists }
+            onToggle = { listsChoice = !expandedLists }
         )
         if (expandedLists) {
             StarListsSection(
