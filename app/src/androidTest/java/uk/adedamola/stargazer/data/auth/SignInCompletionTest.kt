@@ -28,6 +28,7 @@ class SignInCompletionTest {
     private lateinit var keys: TokenManagerFixture
     private lateinit var db: AppDatabase
     private lateinit var session: AccessSession
+    private lateinit var legacy: LegacyStoreFixture
     private val key = fakeKey()
     private val userJson = """{"id":$FIXTURE_USER_ID,"login":"fixture-login","avatar_url":"https://avatars.example/u.png","name":null}"""
     private val network = ScriptedNetwork { request ->
@@ -39,26 +40,27 @@ class SignInCompletionTest {
         keys = TokenManagerFixture()
         db = inMemoryDatabase()
         session = AccessSession(keys.tokenManager)
+        legacy = LegacyStoreFixture()
     }
 
     @After
     fun tearDown() {
         db.close()
         keys.close()
+        legacy.close()
     }
 
-    private fun completer() = SignInCompleter(
-        apiService(keys.tokenManager, network, session), db.accountDao(), keys.tokenManager, clock = { 42L }
-    )
+    private fun newCompleter() =
+        completer(db, keys.tokenManager, apiService(keys.tokenManager, network, session), legacy.store)
 
     @Test
     fun approvalStoresAccountThenKey() = runBlocking<Unit> {
         val navigation = NavigationViewModel(keys.tokenManager)
         withTimeout(10_000) { navigation.authState.first { it == AuthState.Unauthenticated } }
 
-        val result = completer().complete(key)
+        val result = newCompleter().complete(key)
 
-        assertTrue(result.isSuccess)
+        assertEquals(SignInOutcome.Done, result.getOrNull())
         val request = network.requests.single()
         assertEquals("/user", request.url.encodedPath)
         assertEquals("Bearer $key", request.header("Authorization"))
@@ -77,7 +79,7 @@ class SignInCompletionTest {
     fun userFailureStoresNothing() = runBlocking<Unit> {
         network.answer = { Scripted(503) }
 
-        val result = completer().complete(key)
+        val result = newCompleter().complete(key)
 
         assertEquals(503, (result.exceptionOrNull() as HttpException).code())
         assertNull(db.accountDao().get())
@@ -88,7 +90,7 @@ class SignInCompletionTest {
     fun user401DuringSignInRaisesNoAccessEnded() = runBlocking<Unit> {
         network.answer = { Scripted(401) }
 
-        val result = completer().complete(key)
+        val result = newCompleter().complete(key)
 
         assertTrue(result.isFailure)
         assertFalse(session.accessEnded.value)
@@ -100,7 +102,7 @@ class SignInCompletionTest {
     fun viewModelApprovalOpensHomeWithNoFurtherInput() = runBlocking<Unit> {
         val api = FakeDeviceFlowApi(interval = 1)
         api.script({ token(key) })
-        val viewModel = SignInViewModel(DeviceFlowSignIn(api, "Iv-test-client"), completer(), session)
+        val viewModel = SignInViewModel(DeviceFlowSignIn(api, "Iv-test-client"), newCompleter(), session)
         val navigation = NavigationViewModel(keys.tokenManager)
 
         viewModel.signIn()
