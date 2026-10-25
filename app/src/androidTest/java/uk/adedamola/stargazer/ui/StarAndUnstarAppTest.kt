@@ -61,6 +61,7 @@ import uk.adedamola.stargazer.data.repository.GitHubSearch
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.StarEngine
 import uk.adedamola.stargazer.data.repository.StarListRepository
+import uk.adedamola.stargazer.data.repository.StarReconciler
 import uk.adedamola.stargazer.ui.screens.DetailScreen
 import uk.adedamola.stargazer.ui.screens.DetailViewModel
 import uk.adedamola.stargazer.ui.screens.HomeScreen
@@ -156,6 +157,7 @@ class StarAndUnstarAppTest {
             starEngine = engine,
             gitHubSearch = GitHubSearch(api, db.repositoryDao()),
             connectivity = connectivity,
+            reconciler = StarReconciler(api, db, engine),
         )
         val detail = DetailViewModel(GitHubRepositoryImpl(db.repositoryDao(), StarredReposRemoteMediator(api, db), api), SavedStateHandle(), engine)
         check.render {

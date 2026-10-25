@@ -46,6 +46,7 @@ import uk.adedamola.stargazer.data.repository.GitHubRepositoryImpl
 import uk.adedamola.stargazer.data.repository.GitHubSearch
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.StarListRepository
+import uk.adedamola.stargazer.data.repository.StarReconciler
 import uk.adedamola.stargazer.ui.screens.HomeViewModel
 
 /**
@@ -108,6 +109,7 @@ class StarListFilterTest {
         val refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L }
         val connectivity = FakeConnectivity()
         val starScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+        val engine = starEngine(db, network, keys.tokenManager, starScope, connectivity)
         val viewModel = withContext(Dispatchers.Main) {
             HomeViewModel(
                 savedStateHandle = SavedStateHandle(),
@@ -118,9 +120,10 @@ class StarListFilterTest {
                 starListRepository = StarListRepository(db.starListDao()),
                 refresher = refresher,
                 profileDao = db.gitHubProfileDao(),
-                starEngine = starEngine(db, network, keys.tokenManager, starScope, connectivity),
+                starEngine = engine,
                 gitHubSearch = GitHubSearch(api, db.repositoryDao()),
                 connectivity = connectivity,
+                reconciler = StarReconciler(api, db, engine),
             )
         }
         val differ = AsyncPagingDataDiffer(

@@ -45,6 +45,7 @@ import uk.adedamola.stargazer.data.repository.GitHubRepositoryImpl
 import uk.adedamola.stargazer.data.repository.GitHubSearch
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.StarListRepository
+import uk.adedamola.stargazer.data.repository.StarReconciler
 import uk.adedamola.stargazer.ui.screens.GitHubSearchState
 import uk.adedamola.stargazer.ui.screens.HomeViewModel
 
@@ -122,6 +123,7 @@ class GitHubSearchTest {
     @OptIn(ExperimentalPagingApi::class)
     private suspend fun homeViewModel(connectivity: FakeConnectivity): HomeViewModel {
         val api = apiService(keys.tokenManager, network)
+        val engine = starEngine(db, network, keys.tokenManager, scope, connectivity)
         return withContext(Dispatchers.Main) {
             HomeViewModel(
                 savedStateHandle = SavedStateHandle(),
@@ -132,9 +134,10 @@ class GitHubSearchTest {
                 starListRepository = StarListRepository(db.starListDao()),
                 refresher = AccountDataRefresher(api, graphQlApi(keys.tokenManager, network), db) { 1L },
                 profileDao = db.gitHubProfileDao(),
-                starEngine = starEngine(db, network, keys.tokenManager, scope, connectivity),
+                starEngine = engine,
                 gitHubSearch = GitHubSearch(api, db.repositoryDao()),
                 connectivity = connectivity,
+                reconciler = StarReconciler(api, db, engine),
             )
         }
     }

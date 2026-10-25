@@ -57,6 +57,7 @@ import uk.adedamola.stargazer.data.repository.GitHubSearch
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.StarEngine
 import uk.adedamola.stargazer.data.repository.StarListRepository
+import uk.adedamola.stargazer.data.repository.StarReconciler
 import uk.adedamola.stargazer.ui.screens.HomeViewModel
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -174,6 +175,7 @@ class ReconcileBenchmarkTest {
                 starEngine = engine,
                 gitHubSearch = GitHubSearch(api, db.repositoryDao()),
                 connectivity = connectivity,
+                reconciler = StarReconciler(api, db, engine),
             )
         }
         val differ = AsyncPagingDataDiffer(
@@ -204,7 +206,8 @@ class ReconcileBenchmarkTest {
             val states = latest.get() ?: return false
             return states.mediator?.refresh !is LoadState.Loading &&
                 states.refresh !is LoadState.Loading &&
-                !viewModel.syncProgress.value.isLoading
+                !viewModel.syncProgress.value.isLoading &&
+                !viewModel.reconciling.value
         }
 
         suspend fun settle() = withTimeout(120_000) { while (!idle()) delay(20) }
