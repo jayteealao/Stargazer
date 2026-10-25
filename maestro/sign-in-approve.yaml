@@ -1,0 +1,13 @@
+# Full sign-in with a person approving the code on github.com (in the browser tab or on
+# another device), then Home opens by itself. A person must approve: this flow types nothing
+# into GitHub and waits up to 15 minutes.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/sign-in-approve.yaml
+appId: uk.adedamola.stargazer
+---
+- runFlow: sign-in.yaml
+# Home's menu button: GitHub's own pages never show it.
+- extendedWaitUntil:
+    visible: "Open menu"
+    timeout: 900000
+- takeScreenshot: ${OUT}/04-home
