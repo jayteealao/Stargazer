@@ -1,7 +1,7 @@
 package uk.adedamola.stargazer.ui
 
 import androidx.activity.ComponentActivity
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
@@ -132,7 +132,7 @@ class RemovalNoticeAppTest {
         )
         check.render {
             SharedTransitionLayout {
-                AnimatedContent(targetState = Unit, label = "screen") {
+                AnimatedVisibility(visible = true) {
                     HomeScreen(
                         onRepoClick = { _, _ -> },
                         sharedTransitionScope = this@SharedTransitionLayout,
