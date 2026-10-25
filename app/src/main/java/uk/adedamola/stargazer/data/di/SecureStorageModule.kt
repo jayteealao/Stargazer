@@ -40,15 +40,19 @@ object SecureStorageModule {
 
     fun keyFile(context: Context): File = File(File(context.filesDir, KEY_DIR), KEY_FILE)
 
+    /** A corrupt key file reads as empty, which means signed out. */
+    fun createAccessKeyDataStore(scope: CoroutineScope, file: () -> File): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create(
+            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+            scope = scope,
+            produceFile = file,
+        )
+
     @Provides
     @Singleton
     @AccessKeyStore
     fun provideAccessKeyDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create(
-            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-            produceFile = { keyFile(context) },
-        )
+        createAccessKeyDataStore(CoroutineScope(SupervisorJob() + Dispatchers.IO)) { keyFile(context) }
 
     @Provides
     @Singleton
