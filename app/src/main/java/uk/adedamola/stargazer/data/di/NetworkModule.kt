@@ -13,6 +13,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import uk.adedamola.stargazer.BuildConfig
+import uk.adedamola.stargazer.data.auth.AccessEndedInterceptor
 import uk.adedamola.stargazer.data.auth.AuthInterceptor
 import uk.adedamola.stargazer.data.auth.DeviceFlowApi
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
@@ -54,15 +55,18 @@ object NetworkModule {
     }
 
     /**
-     * The GitHub API client. [terminal] is for tests only: it answers requests in place of the
-     * network, after every other interceptor has run.
+     * The GitHub API client. [accessEnded] sees each response with the key it was sent with.
+     * [terminal] is for tests only: it answers requests in place of the network, after every
+     * other interceptor has run.
      */
     fun buildGitHubClient(
         authInterceptor: Interceptor,
         loggingInterceptor: Interceptor,
-        terminal: Interceptor? = null
+        terminal: Interceptor? = null,
+        accessEnded: Interceptor? = null
     ): OkHttpClient = OkHttpClient.Builder()
         .addInterceptor(authInterceptor)
+        .apply { accessEnded?.let { addInterceptor(it) } }
         .addInterceptor(loggingInterceptor)
         .apply { terminal?.let { addInterceptor(it) } }
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -139,8 +143,9 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
-        loggingInterceptor: HttpLoggingInterceptor
-    ): OkHttpClient = buildGitHubClient(authInterceptor, loggingInterceptor)
+        loggingInterceptor: HttpLoggingInterceptor,
+        accessEndedInterceptor: AccessEndedInterceptor
+    ): OkHttpClient = buildGitHubClient(authInterceptor, loggingInterceptor, accessEnded = accessEndedInterceptor)
 
     @Provides
     @Singleton
