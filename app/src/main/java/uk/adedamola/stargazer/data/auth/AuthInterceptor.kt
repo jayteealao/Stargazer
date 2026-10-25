@@ -1,65 +1,35 @@
 package uk.adedamola.stargazer.data.auth
 
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Interceptor that adds GitHub authentication headers to all requests.
- * Caches the token to minimize DataStore access on the critical path.
+ * Adds GitHub's REST API contract headers and the access key to requests for api.github.com.
+ * Requests to any other host pass through unchanged, so the key never leaves for another host.
  */
 @Singleton
 class AuthInterceptor @Inject constructor(
-    private val tokenManager: TokenManager
+    private val accessKeyProvider: AccessKeyProvider
 ) : Interceptor {
 
-    @Volatile
-    private var cachedToken: String? = null
-    private val lock = Any()
-
     override fun intercept(chain: Interceptor.Chain): Response {
-        val token = getToken()
-        val originalRequest = chain.request()
-        val hasAcceptHeader = originalRequest.header("Accept") != null
+        val original = chain.request()
+        if (original.url.host != GITHUB_API_HOST) return chain.proceed(original)
 
-        val request = originalRequest.newBuilder().apply {
-            if (token != null) {
-                addHeader("Authorization", "token $token")
-            }
-            if (!hasAcceptHeader) {
-                addHeader("Accept", "application/vnd.github.v3+json")
-            }
+        val request = original.newBuilder().apply {
+            accessKeyProvider.currentKey()?.let { header("Authorization", "Bearer $it") }
+            if (original.header("Accept") == null) header("Accept", DEFAULT_ACCEPT)
+            header("X-GitHub-Api-Version", API_VERSION)
         }.build()
 
         return chain.proceed(request)
     }
 
-    private fun getToken(): String? {
-        // Return cached token if available
-        cachedToken?.let { return it }
-
-        // Otherwise fetch and cache it
-        synchronized(lock) {
-            // Double-check after acquiring lock
-            cachedToken?.let { return it }
-
-            val token = runBlocking {
-                tokenManager.token.first()
-            }
-            cachedToken = token
-            return token
-        }
-    }
-
-    /**
-     * Call this to invalidate the cached token (e.g., after logout)
-     */
-    fun clearCache() {
-        synchronized(lock) {
-            cachedToken = null
-        }
+    companion object {
+        const val GITHUB_API_HOST = "api.github.com"
+        const val DEFAULT_ACCEPT = "application/vnd.github+json"
+        const val API_VERSION = "2022-11-28"
     }
 }
