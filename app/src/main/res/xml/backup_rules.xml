@@ -15,15 +15,9 @@
   -->
 
 <!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older that API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Backup rules used on API 23 to 30. Everything is backed up except the directory that holds
+   the encrypted GitHub access key.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="file" path="access_key/"/>
 </full-backup-content>
