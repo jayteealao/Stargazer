@@ -6,6 +6,16 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -103,6 +113,24 @@ class AccountDrawerTest {
         assertTrue("$text is cut with an ellipsis", layout.isLineEllipsized(0))
     }
 
+    /** The STAR_LISTS section header (its merged, clickable node). */
+    private fun listsHeader(): SemanticsNodeInteraction =
+        composeRule.onNode(hasText("STAR_LISTS") and hasClickAction())
+
+    private fun assertListsState(state: String) {
+        listsHeader().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, state))
+    }
+
+    /** Opens the STAR_LISTS section with one tap on its header. */
+    private fun openLists() {
+        listsHeader().performClick()
+        composeRule.waitForIdle()
+        assertListsState("Expanded")
+    }
+
+    private fun countUnmerged(text: String) =
+        composeRule.onAllNodes(hasText(text), useUnmergedTree = true).fetchSemanticsNodes().size
+
     @Test
     fun headerDefault() {
         drawer()
@@ -140,6 +168,15 @@ class AccountDrawerTest {
     @Test
     fun listsDefault() {
         drawer(selected = "L0")
+        // Five lists: the section starts folded, names the selected list, and SORT_BY stays in reach.
+        assertListsState("Collapsed")
+        check.assertAbsent("ALL_LISTS")
+        check.assertShown("ANDROID LIBRARIES", "📊 SORT_BY")
+        check.assertTargetsInsideSafeArea()
+        check.capture("drawer-star-lists--collapsed")
+
+        openLists()
+        assertEquals("the name shows once, on its row", 1, countUnmerged("ANDROID LIBRARIES"))
         check.assertShown("ALL_LISTS", "ANDROID LIBRARIES", "48", "RUST TOOLS", "31", "READ LATER", "112", "DESIGN SYSTEMS", "9", "COMPOSE SAMPLES", "22")
         check.assertShown("LIST: ANDROID LIBRARIES", "MATCHES:", "STAR_LISTS")
         check.assertTargetsInsideSafeArea()
@@ -182,6 +219,7 @@ class AccountDrawerTest {
     @Test
     fun listsWorst() {
         drawer(lists = worstLists, selected = "W1")
+        openLists()
         val upper = longName.uppercase()
         assertOneLineEllipsized(upper)
         check.assertShown("999", "0", "LIST: READ LATER")
@@ -190,6 +228,60 @@ class AccountDrawerTest {
         assertTrue("the long name ends before its count", name.right <= count.left)
         check.assertTargetsInsideSafeArea()
         check.capture("drawer-star-lists--worst")
+    }
+
+    @Test
+    fun listsOpenAtFour() {
+        drawer(lists = boardLists.take(4), selected = "L0")
+        assertListsState("Expanded")
+        check.assertShown("ALL_LISTS", "ANDROID LIBRARIES", "RUST TOOLS", "READ LATER", "DESIGN SYSTEMS")
+        assertEquals("no header detail while open", 1, countUnmerged("ANDROID LIBRARIES"))
+    }
+
+    @Test
+    fun listsCollapsedNamesWorst() {
+        drawer(lists = worstLists, selected = "W0")
+        assertListsState("Collapsed")
+        val upper = longName.uppercase()
+        assertOneLineEllipsized(upper)
+        val header = listsHeader().fetchSemanticsNode().boundsInWindow
+        val detail = check.textNode(upper).boundsInWindow
+        // 16dp end padding + the 20dp expand icon stay clear of the name.
+        val iconSpace = with(composeRule.density) { 36.dp.toPx() }
+        assertTrue("the name ends before the expand icon", detail.right <= header.right - iconSpace + 0.5f)
+        assertTrue("the name stays inside the drawer", detail.left >= header.left && detail.right <= header.right)
+        check.assertTargetsInsideSafeArea()
+        check.capture("drawer-star-lists--collapsed-worst")
+    }
+
+    @Test
+    fun listsChoiceHolds() {
+        val three = boardLists.take(3)
+        val otherThree = boardLists.drop(2)
+        val six = boardLists + StarListEntity("L5", "Kotlin tools", null, false, 7, 5, 1L)
+        var lists by mutableStateOf(three)
+        check.render { Drawer(ada, lists, null, RefreshStatus.Succeeded) }
+        assertListsState("Expanded")
+        listsHeader().performClick()
+        assertListsState("Collapsed")
+        composeRule.runOnIdle { lists = otherThree }
+        composeRule.waitForIdle()
+        assertListsState("Collapsed")
+        check.assertAbsent("ALL_LISTS")
+        listsHeader().performClick()
+        assertListsState("Expanded")
+        composeRule.runOnIdle { lists = six }
+        composeRule.waitForIdle()
+        assertListsState("Expanded")
+        check.assertShown("ALL_LISTS", "KOTLIN TOOLS")
+    }
+
+    @Test
+    fun listsCollapsedWithoutSelection() {
+        drawer(lists = boardLists, selected = null)
+        assertListsState("Collapsed")
+        val texts = listsHeader().fetchSemanticsNode().config[SemanticsProperties.Text].map { it.text }
+        assertEquals(listOf("STAR_LISTS"), texts)
     }
 
     @Test
