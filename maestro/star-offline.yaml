@@ -1,0 +1,51 @@
+# Starring with no connection on the real build: a swiped Home card stays and says a
+# connection is needed, the repo screen shows its star control disabled with the same line,
+# and search shows local matches with GitHub results unavailable. Nothing is sent to GitHub.
+#
+# Needs a signed-in fixture account and no GitHub account: run the instrumented seed first
+# (ProfileFixtureSeed with -e profileFixture default), then turn airplane mode on.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/star-offline.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "STARGAZER"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "repo-01"
+    timeout: 10000
+- takeScreenshot: ${OUT}/home
+
+- swipe:
+    from: "repo-01"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: ".*CONNECTION_NEEDED.*"
+    timeout: 5000
+- assertVisible: "repo-01"
+- takeScreenshot: ${OUT}/home-swipe-offline
+
+- tapOn: "repo-01"
+- extendedWaitUntil:
+    visible: "STARRED"
+    timeout: 10000
+- assertVisible: "CONNECTION_NEEDED — starring needs the internet."
+- takeScreenshot: ${OUT}/detail-offline
+- back
+
+- extendedWaitUntil:
+    visible: "SEARCH_REPOSITORIES..."
+    timeout: 10000
+- tapOn: "SEARCH_REPOSITORIES..."
+- inputText: "repo"
+- extendedWaitUntil:
+    visible: "IN_YOUR_STARS.*"
+    timeout: 5000
+- hideKeyboard
+- takeScreenshot: ${OUT}/search-local-offline
+- scrollUntilVisible:
+    element: "CONNECTION_NEEDED — GitHub search needs the internet."
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: ${OUT}/search-offline
