@@ -19,7 +19,7 @@ appId: uk.adedamola.stargazer
 - tapOn: "Open menu"
 - assertVisible: "STARGAZER_SYSTEM"
 - takeScreenshot: ${OUT}/drawer-top
-- assertVisible: "\\[ DISCONNECT_SESSION \\]"
+- assertVisible: "\\[ SIGN_OUT \\]"
 - takeScreenshot: ${OUT}/drawer-footer
 
 - runFlow:
