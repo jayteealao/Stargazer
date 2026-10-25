@@ -20,7 +20,8 @@ fun StargazerButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(vertical = 16.dp)
 ) {
     // Industrial Look: Cut corners (chamfered) instead of rounded
     val shape: Shape = CutCornerShape(topStart = 8.dp, bottomEnd = 8.dp)
@@ -37,7 +38,7 @@ fun StargazerButton(
             disabledContentColor = Color.LightGray
         ),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-        contentPadding = PaddingValues(vertical = 16.dp)
+        contentPadding = contentPadding
     ) {
         Text(
             text = text.uppercase(),

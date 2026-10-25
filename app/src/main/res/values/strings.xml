@@ -16,4 +16,18 @@
 
 <resources>
     <string name="app_name">Stargazer</string>
+
+    <!-- Keep-data question: what is on the phone from an earlier sign-in. -->
+    <plurals name="keep_data_repos">
+        <item quantity="one">%s starred repo</item>
+        <item quantity="other">%s starred repos</item>
+    </plurals>
+    <plurals name="keep_data_tags">
+        <item quantity="one">%s tag</item>
+        <item quantity="other">%s tags</item>
+    </plurals>
+    <plurals name="keep_data_presets">
+        <item quantity="one">%s preset</item>
+        <item quantity="other">%s presets</item>
+    </plurals>
 </resources>
