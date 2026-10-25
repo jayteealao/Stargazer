@@ -271,8 +271,9 @@ private fun AccountDialogWindow(
     }
 }
 
+/** A dialog's title: a yellow icon, then the uppercase title. */
 @Composable
-private fun DialogTitle(icon: ImageVector, text: String) {
+internal fun DialogTitle(icon: ImageVector, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(imageVector = icon, contentDescription = null, tint = FactoryYellow, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))

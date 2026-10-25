@@ -30,4 +30,8 @@
         <item quantity="one">%s preset</item>
         <item quantity="other">%s presets</item>
     </plurals>
+    <plurals name="removal_notice_count">
+        <item quantity="one">%s repo to remove</item>
+        <item quantity="other">%s repos to remove</item>
+    </plurals>
 </resources>
