@@ -44,7 +44,7 @@ class AccessEndedTest {
     private val key = fakeKey()
 
     @Before
-    fun setUp() = runBlocking {
+    fun setUp() = runBlocking<Unit> {
         keys = TokenManagerFixture()
         db = inMemoryDatabase()
         seedLocalData(db)
@@ -62,11 +62,18 @@ class AccessEndedTest {
     private fun service() = apiService(keys.tokenManager, network, session)
 
     @Test
-    fun parallel401DeletesOnceAndRaisesOnce() = runBlocking {
+    fun parallel401DeletesOnceAndRaisesOnce() = runBlocking<Unit> {
         val before = localCounts(db)
         val seen = CopyOnWriteArrayList<Boolean>()
         val watcher = launch(Dispatchers.Unconfined) { session.accessEnded.collect { seen += it } }
-        network.answer = { Scripted(401, """{"message":"Bad credentials"}""") }
+        // Hold the first five requests (OkHttp runs five per host at once) until all of them are
+        // in flight with the key, then answer 401 to every one together.
+        val together = CountDownLatch(5)
+        network.answer = {
+            together.countDown()
+            together.await(5, TimeUnit.SECONDS)
+            Scripted(401, """{"message":"Bad credentials"}""")
+        }
         val api = service()
 
         val failures = (1..8).map {
@@ -75,7 +82,9 @@ class AccessEndedTest {
 
         assertEquals(8, network.requests.size)
         failures.forEach { assertEquals(401, (it as HttpException).code()) }
-        network.requests.forEach { assertEquals("Bearer $key", it.header("Authorization")) }
+        val withKey = network.requests.mapNotNull { it.header("Authorization") }
+        assertTrue("at least five 401s for the stored key", withKey.size >= 5)
+        withKey.forEach { assertEquals("Bearer $key", it) }
         assertTrue(session.accessEnded.value)
         assertEquals("one false → true", listOf(false, true), seen.toList())
         assertNull(keys.tokenManager.currentKey())
@@ -85,7 +94,7 @@ class AccessEndedTest {
     }
 
     @Test
-    fun concurrentConditionalDeletesSucceedOnce() = runBlocking {
+    fun concurrentConditionalDeletesSucceedOnce() = runBlocking<Unit> {
         val results = (1..8).map { async(Dispatchers.IO) { keys.tokenManager.clearTokenIf(key) } }.awaitAll()
 
         assertEquals("deleted exactly once", 1, results.count { it })
@@ -93,7 +102,7 @@ class AccessEndedTest {
     }
 
     @Test
-    fun late401FromOldKeyKeepsNewKey() = runBlocking {
+    fun late401FromOldKeyKeepsNewKey() = runBlocking<Unit> {
         val arrived = CountDownLatch(1)
         val release = CountDownLatch(1)
         network.answer = {
@@ -116,7 +125,7 @@ class AccessEndedTest {
     }
 
     @Test
-    fun ok200StaysSignedIn() = runBlocking {
+    fun ok200StaysSignedIn() = runBlocking<Unit> {
         network.answer = { Scripted(200, "[]") }
 
         service().getStarredRepositories()
@@ -126,7 +135,7 @@ class AccessEndedTest {
     }
 
     @Test
-    fun rateLimitAndServerErrorsStaySignedIn() = runBlocking {
+    fun rateLimitAndServerErrorsStaySignedIn() = runBlocking<Unit> {
         val utc = ZoneId.of("UTC")
         val cases = listOf(
             Scripted(403, headers = mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to "1800000000"))
@@ -149,7 +158,7 @@ class AccessEndedTest {
 
     @OptIn(ExperimentalPagingApi::class)
     @Test
-    fun mediatorShowsReadableError() = runBlocking {
+    fun mediatorShowsReadableError() = runBlocking<Unit> {
         network.answer = { Scripted(429, headers = mapOf("retry-after" to "60")) }
         val mediator = StarredReposRemoteMediator(service(), db)
 
@@ -164,7 +173,7 @@ class AccessEndedTest {
     }
 
     @Test
-    fun navigationShowsSignInAfter401() = runBlocking {
+    fun navigationShowsSignInAfter401() = runBlocking<Unit> {
         val navigation = NavigationViewModel(keys.tokenManager)
         withTimeout(10_000) { navigation.authState.first { it == AuthState.Authenticated } }
         network.answer = { Scripted(401) }

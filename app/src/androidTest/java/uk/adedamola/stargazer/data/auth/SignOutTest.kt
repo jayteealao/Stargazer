@@ -17,7 +17,7 @@ import uk.adedamola.stargazer.ui.NavigationViewModel
 class SignOutTest {
 
     @Test
-    fun signOutDeletesKeyOnly() = runBlocking {
+    fun signOutDeletesKeyOnly() = runBlocking<Unit> {
         val keys = TokenManagerFixture()
         val db = inMemoryDatabase()
         try {

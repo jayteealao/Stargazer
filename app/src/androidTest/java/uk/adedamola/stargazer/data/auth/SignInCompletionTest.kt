@@ -52,7 +52,7 @@ class SignInCompletionTest {
     )
 
     @Test
-    fun approvalStoresAccountThenKey() = runBlocking {
+    fun approvalStoresAccountThenKey() = runBlocking<Unit> {
         val navigation = NavigationViewModel(keys.tokenManager)
         withTimeout(10_000) { navigation.authState.first { it == AuthState.Unauthenticated } }
 
@@ -74,7 +74,7 @@ class SignInCompletionTest {
     }
 
     @Test
-    fun userFailureStoresNothing() = runBlocking {
+    fun userFailureStoresNothing() = runBlocking<Unit> {
         network.answer = { Scripted(503) }
 
         val result = completer().complete(key)
@@ -85,7 +85,7 @@ class SignInCompletionTest {
     }
 
     @Test
-    fun user401DuringSignInRaisesNoAccessEnded() = runBlocking {
+    fun user401DuringSignInRaisesNoAccessEnded() = runBlocking<Unit> {
         network.answer = { Scripted(401) }
 
         val result = completer().complete(key)
@@ -97,7 +97,7 @@ class SignInCompletionTest {
     }
 
     @Test
-    fun viewModelApprovalOpensHomeWithNoFurtherInput() = runBlocking {
+    fun viewModelApprovalOpensHomeWithNoFurtherInput() = runBlocking<Unit> {
         val api = FakeDeviceFlowApi(interval = 1)
         api.script({ token(key) })
         val viewModel = SignInViewModel(DeviceFlowSignIn(api, "Iv-test-client"), completer(), session)

@@ -54,7 +54,7 @@ class SignInHttpClientTest {
     }
 
     @Test
-    fun noAuthorizationOnSignInRequests() = runBlocking {
+    fun noAuthorizationOnSignInRequests() = runBlocking<Unit> {
         val network = network()
         val client = NetworkModule.buildSignInClient(NetworkModule.createSignInLoggingInterceptor { }, terminal = network)
 
@@ -77,7 +77,7 @@ class SignInHttpClientTest {
     }
 
     @Test
-    fun tokenRequestCarriesNoClientSecret() = runBlocking {
+    fun tokenRequestCarriesNoClientSecret() = runBlocking<Unit> {
         val network = network()
         val api = api(network)
 
@@ -95,7 +95,7 @@ class SignInHttpClientTest {
     }
 
     @Test
-    fun acceptsJson() = runBlocking {
+    fun acceptsJson() = runBlocking<Unit> {
         val network = network()
         val api = api(network)
 
@@ -106,7 +106,7 @@ class SignInHttpClientTest {
     }
 
     @Test
-    fun logNeverHoldsTheKeyOrBodies() = runBlocking {
+    fun logNeverHoldsTheKeyOrBodies() = runBlocking<Unit> {
         val lines = CopyOnWriteArrayList<String>()
         val api = api(network(), lines)
 
