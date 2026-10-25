@@ -25,7 +25,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.local.database.AppDatabase
+import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
+import uk.adedamola.stargazer.data.local.database.StarListDao
 import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.local.database.RepositoryTagDao
 import uk.adedamola.stargazer.data.local.database.SearchPresetDao
@@ -77,6 +80,21 @@ class DatabaseModule {
     @Provides
     fun provideSyncMetadataDao(appDatabase: AppDatabase): SyncMetadataDao {
         return appDatabase.syncMetadataDao()
+    }
+
+    @Provides
+    fun provideAccountDao(appDatabase: AppDatabase): AccountDao {
+        return appDatabase.accountDao()
+    }
+
+    @Provides
+    fun provideGitHubProfileDao(appDatabase: AppDatabase): GitHubProfileDao {
+        return appDatabase.gitHubProfileDao()
+    }
+
+    @Provides
+    fun provideStarListDao(appDatabase: AppDatabase): StarListDao {
+        return appDatabase.starListDao()
     }
 
     @Provides

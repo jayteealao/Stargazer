@@ -26,9 +26,13 @@ import androidx.room.RoomDatabase
         Tag::class,
         RepositoryTag::class,
         SearchPreset::class,
-        SyncMetadata::class
+        SyncMetadata::class,
+        AccountRecord::class,
+        GitHubProfileEntity::class,
+        StarListEntity::class,
+        StarListItemEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,4 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun repositoryTagDao(): RepositoryTagDao
     abstract fun searchPresetDao(): SearchPresetDao
     abstract fun syncMetadataDao(): SyncMetadataDao
+    abstract fun accountDao(): AccountDao
+    abstract fun gitHubProfileDao(): GitHubProfileDao
+    abstract fun starListDao(): StarListDao
 }
