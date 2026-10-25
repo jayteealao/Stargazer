@@ -28,7 +28,7 @@ import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.ui.AuthState
 import uk.adedamola.stargazer.ui.NavigationViewModel
 import java.io.IOException
-import java.time.ZoneId
+import java.util.TimeZone
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -136,7 +136,7 @@ class AccessEndedTest {
 
     @Test
     fun rateLimitAndServerErrorsStaySignedIn() = runBlocking<Unit> {
-        val utc = ZoneId.of("UTC")
+        val utc = TimeZone.getTimeZone("UTC")
         val cases = listOf(
             Scripted(403, headers = mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to "1800000000"))
                 to "RATE_LIMITED — RETRY AT 08:00",

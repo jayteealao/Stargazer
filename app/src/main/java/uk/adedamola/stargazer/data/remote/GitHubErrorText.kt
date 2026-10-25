@@ -2,9 +2,10 @@ package uk.adedamola.stargazer.data.remote
 
 import retrofit2.HttpException
 import java.io.IOException
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * One readable status line for a failed GitHub call, in the app's terminal voice. A rate limit
@@ -13,11 +14,9 @@ import java.time.format.DateTimeFormatter
  */
 object GitHubErrorText {
 
-    private val clock = DateTimeFormatter.ofPattern("HH:mm")
-
     fun describe(
         e: Throwable,
-        zone: ZoneId = ZoneId.systemDefault(),
+        zone: TimeZone = TimeZone.getDefault(),
         nowMillis: Long = System.currentTimeMillis()
     ): String = when (e) {
         is HttpException -> describeHttp(e, zone, nowMillis)
@@ -25,11 +24,13 @@ object GitHubErrorText {
         else -> "ERROR: ${e.message}"
     }
 
-    private fun describeHttp(e: HttpException, zone: ZoneId, nowMillis: Long): String {
+    private fun describeHttp(e: HttpException, zone: TimeZone, nowMillis: Long): String {
         val code = e.code()
         if (code == 403 || code == 429) {
             retryAt(e, nowMillis)?.let { at ->
-                return "RATE_LIMITED — RETRY AT ${clock.format(Instant.ofEpochMilli(at).atZone(zone))}"
+                // java.text, not java.time: minSdk 23 has no java.time without desugaring.
+                val clock = SimpleDateFormat("HH:mm", Locale.US).apply { timeZone = zone }
+                return "RATE_LIMITED — RETRY AT ${clock.format(Date(at))}"
             }
         }
         return when {
