@@ -1,5 +1,6 @@
 package uk.adedamola.stargazer.data.auth
 
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Base64
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -14,6 +15,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -23,10 +25,18 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import uk.adedamola.stargazer.data.di.SecureStorageModule
 import java.io.File
+import java.security.InvalidKeyException
 import java.security.KeyStore
+import java.security.KeyStoreException
+import java.security.ProviderException
+import java.security.UnrecoverableKeyException
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
-/** The Keystore envelope: encryption at rest and the "unreadable key means signed out" rule. */
+/**
+ * The Keystore envelope: encryption at rest, and the rule that a key that can never be read
+ * again is deleted while a short-lived failure keeps it for the next read.
+ */
 @RunWith(AndroidJUnit4::class)
 class TokenManagerEnvelopeTest {
 
@@ -70,6 +80,34 @@ class TokenManagerEnvelopeTest {
         TokenManager(dataStore, AndroidKeystoreCipher(cipherAlias), scope)
 
     private suspend fun storedCiphertext(): ByteArray? = dataStore.data.first()[ciphertextKey]
+
+    /** Throws [decryptFailure] from [decrypt] while it is set; otherwise the real cipher. */
+    private class FailingCipher(val delegate: AccessKeyCipher) : AccessKeyCipher {
+        @Volatile var decryptFailure: Exception? = null
+        val deleteKeyCalls = AtomicInteger()
+
+        override fun encrypt(plain: String): ByteArray = delegate.encrypt(plain)
+
+        override fun decrypt(blob: ByteArray): String {
+            decryptFailure?.let { throw it }
+            return delegate.decrypt(blob)
+        }
+
+        override fun deleteKey() {
+            deleteKeyCalls.incrementAndGet()
+            delegate.deleteKey()
+        }
+    }
+
+    /** Runs [block] with a scope whose store watchers stop when the block ends. */
+    private fun withManagerScope(block: suspend (CoroutineScope) -> Unit) = runBlocking {
+        val caseJob = SupervisorJob(job)
+        try {
+            block(CoroutineScope(caseJob + Dispatchers.IO))
+        } finally {
+            caseJob.cancelAndJoin()
+        }
+    }
 
     @Test
     fun roundTrip() = runBlocking {
@@ -134,6 +172,65 @@ class TokenManagerEnvelopeTest {
         val manager = manager()
         assertNull(manager.token.first())
         assertNull(manager.currentKey())
+    }
+
+    @Test
+    fun transientFailureKeepsTheKeyForTheNextRead() {
+        listOf(
+            KeyStoreException("busy"),
+            ProviderException("busy"),
+            UnrecoverableKeyException("x").apply { initCause(KeyStoreException("busy")) },
+            InvalidKeyException("Keystore operation failed"),
+        ).forEach { failure ->
+            withManagerScope { caseScope ->
+                val name = failure.javaClass.simpleName
+                TokenManager(dataStore, AndroidKeystoreCipher(alias), caseScope).saveToken(fakeKey)
+                val saved = storedCiphertext()!!
+                val cipher = FailingCipher(AndroidKeystoreCipher(alias)).apply { decryptFailure = failure }
+                val manager = TokenManager(dataStore, cipher, caseScope)
+
+                assertNull("$name: token", manager.token.first())
+                assertNull("$name: currentKey", manager.currentKey())
+                assertArrayEquals("$name: ciphertext kept", saved, storedCiphertext())
+                assertTrue("$name: Keystore key kept", keyStore().containsAlias(alias))
+                assertEquals("$name: deleteKey calls", 0, cipher.deleteKeyCalls.get())
+
+                cipher.decryptFailure = null
+
+                assertEquals("$name: next read (not cached)", fakeKey, manager.currentKey())
+                assertEquals("$name: token after recovery", fakeKey, manager.token.first())
+            }
+        }
+    }
+
+    @Test
+    fun invalidatedKeyReadsAsNoKey() {
+        listOf(
+            KeyPermanentlyInvalidatedException(),
+            UnrecoverableKeyException("x"),
+        ).forEach { failure ->
+            withManagerScope { caseScope ->
+                val name = failure.javaClass.simpleName
+                TokenManager(dataStore, AndroidKeystoreCipher(alias), caseScope).saveToken(fakeKey)
+                val cipher = FailingCipher(AndroidKeystoreCipher(alias)).apply { decryptFailure = failure }
+                val manager = TokenManager(dataStore, cipher, caseScope)
+
+                assertNull("$name: token", manager.token.first())
+                assertNull("$name: ciphertext deleted", storedCiphertext())
+                assertEquals("$name: deleteKey calls", 1, cipher.deleteKeyCalls.get())
+            }
+        }
+    }
+
+    @Test
+    fun unknownVersionReadsAsNoKey() = runBlocking {
+        manager().saveToken(fakeKey)
+        val blob = storedCiphertext()!!.copyOf()
+        blob[0] = 0x02
+        dataStore.edit { it[ciphertextKey] = blob }
+
+        assertNull(manager().token.first())
+        assertNull("ciphertext deleted", storedCiphertext())
     }
 
     @Test
