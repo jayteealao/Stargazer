@@ -74,6 +74,7 @@ import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import uk.adedamola.stargazer.data.repository.Attempt
 import uk.adedamola.stargazer.ui.components.CreateTagDialog
 import uk.adedamola.stargazer.ui.components.FilterDrawerContent
+import uk.adedamola.stargazer.ui.components.RemovalNotice
 import uk.adedamola.stargazer.ui.components.RepoCard
 import uk.adedamola.stargazer.ui.components.SearchBar
 import uk.adedamola.stargazer.ui.components.SearchSectionLabel
@@ -117,6 +118,8 @@ fun HomeScreen(
     val gitHubSearch by viewModel.gitHubSearchState.collectAsState()
     val searchControlStates by viewModel.searchControlStates.collectAsState()
     val undoOffer by viewModel.undoOffer.collectAsState()
+    val reconciling by viewModel.reconciling.collectAsState()
+    val removalNotice by viewModel.removalNotice.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // The Undo offer stays up until its window ends; clearing the offer dismisses it.
@@ -290,7 +293,8 @@ fun HomeScreen(
 
                 // Repository List
                 PullToRefreshBox(
-                    isRefreshing = isRefreshing,
+                    // The refresh also reads the whole starred list; the indicator waits for it.
+                    isRefreshing = isRefreshing || reconciling,
                     onRefresh = {
                         isRefreshing = true
                         repositories.refresh()
@@ -483,6 +487,8 @@ fun HomeScreen(
     }
 
     // Dialogs and Bottom Sheets
+    removalNotice?.let { count -> RemovalNotice(count = count, onContinue = viewModel::confirmRemoval) }
+
     if (showCreateTagDialog) {
         CreateTagDialog(
             onDismiss = { showCreateTagDialog = false },
