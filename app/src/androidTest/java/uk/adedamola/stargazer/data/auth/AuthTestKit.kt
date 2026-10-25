@@ -10,8 +10,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -25,6 +29,7 @@ import uk.adedamola.stargazer.data.di.SecureStorageModule
 import uk.adedamola.stargazer.data.local.database.AccountRecord
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.GitHubProfileEntity
+import uk.adedamola.stargazer.data.local.database.PendingUnstarEntity
 import uk.adedamola.stargazer.data.local.database.RepositoryEntity
 import uk.adedamola.stargazer.data.local.database.RepositoryTag
 import uk.adedamola.stargazer.data.local.database.SearchPreset
@@ -33,8 +38,10 @@ import uk.adedamola.stargazer.data.local.database.StarListItemEntity
 import uk.adedamola.stargazer.data.local.database.SyncMetadata
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
+import uk.adedamola.stargazer.data.remote.Connectivity
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import uk.adedamola.stargazer.data.remote.api.GitHubGraphQlApi
+import uk.adedamola.stargazer.data.repository.StarEngine
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -321,12 +328,13 @@ suspend fun seedLocalData(db: AppDatabase) {
     )
     db.starListDao().upsertLists(listOf(StarListEntity("list-1", "kept", null, false, 1, 0, 1L)))
     db.starListDao().upsertItems(listOf(StarListItemEntity("list-1", 900_001L)))
+    db.pendingUnstarDao().insert(PendingUnstarEntity(900_003, "fixture", "repo-3", PendingUnstarEntity.CONFIRMED, 2L, 1L))
 }
 
 /** Every table that holds account-derived data (the wipe set); `account` is the record itself. */
 val WIPE_TABLES = listOf(
     "repositories", "tags", "repository_tags", "search_presets", "sync_metadata",
-    "github_profile", "star_lists", "star_list_items"
+    "github_profile", "star_lists", "star_list_items", "pending_unstars"
 )
 
 /** Row counts of the account record and every table that local data lives in. */
@@ -408,3 +416,104 @@ fun fixtureRepo(n: Int) = RepositoryEntity(
     licenseName = "MIT",
     starredAt = 1_760_000_000_000L - n,
 )
+
+/** A connection the test switches on and off. */
+class FakeConnectivity(online: Boolean = true) : Connectivity {
+    override val online = MutableStateFlow(online)
+    fun set(value: Boolean) { online.value = value }
+}
+
+/**
+ * The Undo window's wait, held until the test calls [release]: `sleep` for a [StarEngine] that
+ * lets the test end the window when it chooses.
+ */
+class WindowGate {
+    private var gate = CompletableDeferred<Unit>()
+    @Volatile var waits = 0
+        private set
+
+    val sleep: suspend (Long) -> Unit = { waits++; gate.await() }
+
+    /** Ends every window that is waiting now; later windows wait again. */
+    fun release() {
+        val open = gate
+        gate = CompletableDeferred()
+        open.complete(Unit)
+    }
+}
+
+/** A [StarEngine] over [db] and the production GitHub stack answered by [network]. */
+fun starEngine(
+    db: AppDatabase,
+    network: ScriptedNetwork,
+    keys: AccessKeyProvider,
+    scope: CoroutineScope,
+    connectivity: Connectivity = FakeConnectivity(),
+    clock: () -> Long = System::currentTimeMillis,
+    sleep: suspend (Long) -> Unit = WindowGate().sleep,
+    session: AccessSession? = null,
+): StarEngine = StarEngine(apiService(keys, network, session), db, connectivity, clock, scope, sleep)
+
+/** The path of GitHub's star endpoint for one repository. */
+fun starPath(owner: String, repo: String) = "/user/starred/$owner/$repo"
+
+/** The requests [network] saw for [method] on [path]. */
+fun ScriptedNetwork.calls(method: String, path: String): List<Request> =
+    requests.filter { it.method == method && it.url.encodedPath == path }
+
+/** A rate-limit answer with `retry-after` in seconds. */
+fun rateLimited(code: Int = 403, retryAfterSeconds: Long) =
+    Scripted(code, "{}", mapOf("retry-after" to retryAfterSeconds.toString()))
+
+/** A rate-limit answer with no requests left until [epochSeconds]. */
+fun rateLimitReset(code: Int = 429, epochSeconds: Long) =
+    Scripted(code, "{}", mapOf("x-ratelimit-remaining" to "0", "x-ratelimit-reset" to epochSeconds.toString()))
+
+/** One repository in GitHub's REST shape. */
+fun repoJson(id: Int, owner: String, name: String, stars: Int = 1000): JsonObject = buildJsonObject {
+    put("id", id)
+    put("name", name)
+    put("full_name", "$owner/$name")
+    putJsonObject("owner") {
+        put("login", owner)
+        put("id", id + 1)
+        put("avatar_url", "")
+        put("url", "https://api.github.com/users/$owner")
+        put("html_url", "https://github.com/$owner")
+        put("type", "User")
+    }
+    put("html_url", "https://github.com/$owner/$name")
+    put("description", "Search result $owner/$name.")
+    put("fork", false)
+    put("url", "https://api.github.com/repos/$owner/$name")
+    put("created_at", "2020-01-01T00:00:00Z")
+    put("updated_at", "2026-10-01T00:00:00Z")
+    put("pushed_at", "2026-10-01T00:00:00Z")
+    put("homepage", JsonNull)
+    put("size", 100)
+    put("stargazers_count", stars)
+    put("watchers_count", stars)
+    put("language", "Kotlin")
+    put("forks_count", 10)
+    put("open_issues_count", 1)
+    put("default_branch", "main")
+    putJsonArray("topics") {}
+    put("visibility", "public")
+    put("license", JsonNull)
+}
+
+/** A `search/repositories` answer. */
+fun searchJson(total: Int, repos: List<JsonObject>): String = buildJsonObject {
+    put("total_count", total)
+    put("incomplete_results", false)
+    put("items", JsonArray(repos))
+}.toString()
+
+/** Waits up to [timeoutMillis] for [condition]; fails with [what] when it never holds. */
+suspend fun eventually(what: String, timeoutMillis: Long = 5_000, condition: suspend () -> Boolean) {
+    try {
+        withTimeout(timeoutMillis) { while (!condition()) delay(20) }
+    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+        throw AssertionError("timed out waiting for: $what")
+    }
+}
