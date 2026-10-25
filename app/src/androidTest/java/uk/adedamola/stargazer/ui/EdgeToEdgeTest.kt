@@ -91,6 +91,8 @@ class EdgeToEdgeTest {
                 navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
             )
         }
+        // Built once outside composition, so a recomposition never creates a second view model.
+        val viewModel = DetailViewModel(FakeReadmeRepository(), SavedStateHandle())
         composeRule.setContent {
             StargazerTheme {
                 SharedTransitionLayout {
@@ -100,7 +102,7 @@ class EdgeToEdgeTest {
                             repoId = 900001,
                             sharedTransitionScope = this@SharedTransitionLayout,
                             animatedVisibilityScope = this,
-                            viewModel = DetailViewModel(FakeReadmeRepository(), SavedStateHandle())
+                            viewModel = viewModel
                         )
                     }
                 }
