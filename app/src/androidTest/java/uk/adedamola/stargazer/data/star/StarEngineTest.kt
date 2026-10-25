@@ -168,6 +168,23 @@ class StarEngineTest {
         assertEquals(2, db.repositoryDao().getRepositoryCount())
     }
 
+    /** With the real clock and the real wait, Undo is offered for about five seconds (AC-29). */
+    @Test
+    fun undoIsOfferedForAboutFiveSecondsOnTheRealClock() = runBlocking<Unit> {
+        val realTime = starEngine(db, network, keys.tokenManager, scope, connectivity, System::currentTimeMillis, { delay(it) })
+        val start = System.currentTimeMillis()
+        assertEquals(Attempt.Sent, realTime.unstar(repo1))
+
+        delay(3_000)
+        assertEquals("still offered after 3 s", UndoOffer(repo1.id, "fixture/repo-1"), realTime.undoOffer.value)
+        assertNotNull("data kept inside the window", db.repositoryDao().getRepositoryById(repo1.id))
+
+        eventually("offer ends", timeoutMillis = 8_000) { realTime.undoOffer.value == null }
+        val shown = System.currentTimeMillis() - start
+        assertTrue("Undo offered for $shown ms", shown in 4_500..6_500)
+        eventually("data deleted after the window") { db.repositoryDao().getRepositoryById(repo1.id) == null }
+    }
+
     @Test
     fun rejectedOrFailedRestores() = runBlocking<Unit> {
         for ((answer, expected) in listOf(
