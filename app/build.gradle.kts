@@ -148,6 +148,8 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.paging.runtime)
     implementation(libs.androidx.paging.compose)
+    // In-app browser tab for the GitHub device-code page
+    implementation(libs.androidx.browser)
 
     // Networking
     implementation(libs.retrofit)
@@ -186,4 +188,5 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
 }
