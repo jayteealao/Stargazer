@@ -37,7 +37,10 @@ class EdgeToEdgeFixtureSeed {
     @Test
     fun seed() = runBlocking {
         tokenManager.saveToken("edge-to-edge-fixture")
-        @Suppress("DEPRECATION") // sdlc-debt: insert-or-replace is the wanted behaviour for a fixture reseed; upsert would keep stale local flags
+        // sdlc-debt: relies on the deprecated insert-or-replace DAO call (ceiling: test-only fixture
+        // seed, breaks if the DAO drops the method); upgrade path: a DAO helper that resets local
+        // flags and upserts, so a reseed never keeps stale favorites or pins.
+        @Suppress("DEPRECATION")
         repositoryDao.insertRepositories(fixtureRepos())
     }
 
