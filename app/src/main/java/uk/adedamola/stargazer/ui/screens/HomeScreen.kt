@@ -72,6 +72,7 @@ fun HomeScreen(
     onRepoClick: (String, Int) -> Unit,
     sharedTransitionScope: androidx.compose.animation.SharedTransitionScope,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    onProfileClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val repositories = viewModel.repositories.collectAsLazyPagingItems()
@@ -87,6 +88,10 @@ fun HomeScreen(
     val minStars by viewModel.minStars.collectAsState()
     val maxStars by viewModel.maxStars.collectAsState()
     val savedPresets by viewModel.savedPresets.collectAsState()
+    val account by viewModel.account.collectAsState()
+    val starLists by viewModel.starLists.collectAsState()
+    val selectedListId by viewModel.selectedListId.collectAsState()
+    val listsStatus by viewModel.listsStatus.collectAsState()
 
     // Track repository states locally (favorite, pinned, tags)
     val repositoryStates = remember { mutableStateMapOf<Int, RepositoryState>() }
@@ -134,7 +139,17 @@ fun HomeScreen(
                     onApplyFilters = {
                         scope.launch { drawerState.close() }
                     },
-                    onLogout = { viewModel.logout() }
+                    onLogout = { viewModel.logout() },
+                    account = account,
+                    starLists = starLists,
+                    selectedListId = selectedListId,
+                    listsStatus = listsStatus,
+                    onListSelect = viewModel::filterByList,
+                    onListsRetry = viewModel::refreshAccountData,
+                    onProfileClick = {
+                        scope.launch { drawerState.close() }
+                        onProfileClick()
+                    }
                 )
             }
         }
