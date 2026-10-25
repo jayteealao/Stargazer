@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import java.util.Properties
+
 @Suppress("DSL_SCOPE_VIOLATION") // Remove when fixed https://youtrack.jetbrains.com/issue/KTIJ-19369
 plugins {
     alias(libs.plugins.android.application)
@@ -58,14 +60,23 @@ android {
         }
     }
 
+    // Release signing reads SIGNING_STORE_FILE, SIGNING_STORE_PASSWORD, SIGNING_KEY_ALIAS and
+    // SIGNING_KEY_PASSWORD from the git-ignored signing.properties at the repository root when it
+    // exists, else from environment variables of the same names (as CI sets them).
+    val signingProperties = Properties().apply {
+        val file = rootProject.file("signing.properties")
+        if (file.exists()) file.inputStream().use { load(it) }
+    }
+    fun signingValue(name: String): String? = signingProperties.getProperty(name) ?: System.getenv(name)
+
     signingConfigs {
         create("release") {
-            val keystoreFile = System.getenv("SIGNING_STORE_FILE")
+            val keystoreFile = signingValue("SIGNING_STORE_FILE")
             if (keystoreFile != null) {
-                storeFile = file(keystoreFile)
-                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+                storeFile = rootProject.file(keystoreFile)
+                storePassword = signingValue("SIGNING_STORE_PASSWORD")
+                keyAlias = signingValue("SIGNING_KEY_ALIAS")
+                keyPassword = signingValue("SIGNING_KEY_PASSWORD")
             }
         }
     }
@@ -77,7 +88,7 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
         getByName("debug") {
-            if (System.getenv("SIGNING_STORE_FILE") != null) {
+            if (signingValue("SIGNING_STORE_FILE") != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
