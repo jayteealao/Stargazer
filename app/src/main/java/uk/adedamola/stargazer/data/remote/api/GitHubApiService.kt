@@ -72,7 +72,7 @@ interface GitHubApiService {
      * @param owner Repository owner
      * @param repo Repository name
      */
-    @Headers("Accept: application/vnd.github.v3.raw")
+    @Headers("Accept: application/vnd.github.raw+json")
     @GET("repos/{owner}/{repo}/readme")
     suspend fun getReadme(
         @Path("owner") owner: String,
@@ -84,7 +84,7 @@ interface GitHubApiService {
      * @param request The markdown rendering request containing text, mode, and context
      * @return Rendered HTML string
      */
-    @Headers("Accept: text/html")
+    @Headers("Accept: application/vnd.github+json")
     @POST("markdown")
     suspend fun renderMarkdown(
         @Body request: MarkdownRenderRequest

@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -33,33 +34,46 @@ object NetworkModule {
         isLenient = true
     }
 
+    /**
+     * Full bodies in debug builds, request lines only in release. The Authorization header is
+     * redacted in every build type, so no log line carries the access key.
+     */
+    fun createLoggingInterceptor(
+        debug: Boolean,
+        logger: HttpLoggingInterceptor.Logger = HttpLoggingInterceptor.Logger.DEFAULT
+    ): HttpLoggingInterceptor = HttpLoggingInterceptor(logger).apply {
+        level = if (debug) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.BASIC
+        redactHeader("Authorization")
+    }
+
+    /**
+     * The GitHub API client. [terminal] is for tests only: it answers requests in place of the
+     * network, after every other interceptor has run.
+     */
+    fun buildGitHubClient(
+        authInterceptor: Interceptor,
+        loggingInterceptor: Interceptor,
+        terminal: Interceptor? = null
+    ): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(authInterceptor)
+        .addInterceptor(loggingInterceptor)
+        .apply { terminal?.let { addInterceptor(it) } }
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
+
     @Provides
     @Singleton
-    fun provideHttpLoggingInterceptor(): HttpLoggingInterceptor {
-        return HttpLoggingInterceptor().apply {
-            // Only log full bodies in debug builds for security
-            level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
-            } else {
-                HttpLoggingInterceptor.Level.BASIC
-            }
-        }
-    }
+    fun provideHttpLoggingInterceptor(): HttpLoggingInterceptor =
+        createLoggingInterceptor(BuildConfig.DEBUG)
 
     @Provides
     @Singleton
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
         loggingInterceptor: HttpLoggingInterceptor
-    ): OkHttpClient {
-        return OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .build()
-    }
+    ): OkHttpClient = buildGitHubClient(authInterceptor, loggingInterceptor)
 
     @Provides
     @Singleton
