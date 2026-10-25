@@ -25,6 +25,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -33,6 +35,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +60,11 @@ import com.multiplatform.webview.web.WebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
 import uk.adedamola.stargazer.R
+import uk.adedamola.stargazer.data.repository.StarMessage
+import uk.adedamola.stargazer.ui.components.GitHubStarToggle
+import uk.adedamola.stargazer.ui.components.StarSnackbarHost
+import uk.adedamola.stargazer.ui.components.StarStatusLine
+import uk.adedamola.stargazer.ui.components.undoVisuals
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
@@ -73,6 +81,16 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val undoOffer by viewModel.undoOffer.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // The Undo offer stays up until its window ends; clearing the offer dismisses it.
+    LaunchedEffect(undoOffer) {
+        val offer = undoOffer ?: return@LaunchedEffect
+        if (snackbarHostState.showSnackbar(undoVisuals(offer.fullName)) == SnackbarResult.ActionPerformed) {
+            viewModel.undo(offer.repoId)
+        }
+    }
 
     LaunchedEffect(repoName) {
         if (repoName != null) {
@@ -83,6 +101,7 @@ fun DetailScreen(
     Scaffold(
         containerColor = FactoryDarkGrey,
         contentWindowInsets = WindowInsets.safeBars,
+        snackbarHost = { StarSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 windowInsets = WindowInsets.safeBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
@@ -122,6 +141,7 @@ fun DetailScreen(
             is DetailUiState.Success -> {
                 val repo = state.repository
                 val readme = state.readme
+                val starState by viewModel.starState(repo.id).collectAsState()
                 val uriHandler = LocalUriHandler.current
                 with(sharedTransitionScope) {
                     Column(
@@ -226,6 +246,12 @@ fun DetailScreen(
                                 StatItem("FORKS", repo.forksCount.toString(), FactoryCyan)
                                 StatItem("WATCHERS", repo.watchersCount.toString(), FactoryOrange)
 
+                                GitHubStarToggle(
+                                    state = starState,
+                                    fullName = repo.fullName,
+                                    onClick = { viewModel.toggleStar(repo) }
+                                )
+
                                 IconButton(
                                     onClick = { uriHandler.openUri(repo.htmlUrl) },
                                     modifier = Modifier
@@ -239,6 +265,15 @@ fun DetailScreen(
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
+                            }
+
+                            starState.status?.let { status ->
+                                val retryable = status is StarMessage.UnstarFailed ||
+                                    status is StarMessage.RestarFailed || status is StarMessage.StarFailed
+                                StarStatusLine(
+                                    message = status,
+                                    onRetry = if (retryable) ({ viewModel.retry(repo) }) else null
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
