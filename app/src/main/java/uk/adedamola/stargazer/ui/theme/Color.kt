@@ -10,6 +10,8 @@ val FactorySurfaceGrey = Color(0xFF2D2D2D)
 val FactoryTextWhite = Color(0xFFF0F0F0)
 val FactoryTextGrey = Color(0xFFAAAAAA)
 val FactoryBorder = Color(0xFF444444)
+// Fill behind yellow warnings: the access-ended banner and failure messages.
+val FactoryWarnContainer = Color(0xFF3A2A00)
 
 // Material 3 Color Schemes
 val Primary = FactoryOrange
