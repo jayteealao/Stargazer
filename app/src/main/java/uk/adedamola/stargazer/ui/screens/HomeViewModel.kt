@@ -5,9 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import androidx.paging.filter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +22,9 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
@@ -30,7 +35,16 @@ import uk.adedamola.stargazer.data.auth.AccountSummary
 import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
 import uk.adedamola.stargazer.data.local.database.StarListEntity
+import uk.adedamola.stargazer.data.remote.Connectivity
+import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.data.repository.AccountDataRefresher
+import uk.adedamola.stargazer.data.repository.Attempt
+import uk.adedamola.stargazer.data.repository.GitHubSearch
+import uk.adedamola.stargazer.data.repository.RepoRef
+import uk.adedamola.stargazer.data.repository.StarControlState
+import uk.adedamola.stargazer.data.repository.StarEngine
+import uk.adedamola.stargazer.data.repository.StarMessage
+import uk.adedamola.stargazer.data.repository.UndoOffer
 import uk.adedamola.stargazer.data.repository.RefreshStatus
 import uk.adedamola.stargazer.data.repository.StarListRepository
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
@@ -56,7 +70,16 @@ private data class FilterState(
     val listId: String?
 )
 
-@OptIn(FlowPreview::class)
+/** GitHub-wide results for the search query, shown under `ON_GITHUB`. */
+sealed interface GitHubSearchState {
+    data object Idle : GitHubSearchState
+    data object Loading : GitHubSearchState
+    data class Loaded(val total: Int, val items: List<GitHubRepository>) : GitHubSearchState
+    data object Offline : GitHubSearchState
+    data class Failed(val text: String) : GitHubSearchState
+}
+
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
@@ -66,12 +89,18 @@ class HomeViewModel @Inject constructor(
     accountDao: AccountDao,
     private val starListRepository: StarListRepository,
     private val refresher: AccountDataRefresher,
-    profileDao: GitHubProfileDao
+    profileDao: GitHubProfileDao,
+    private val starEngine: StarEngine,
+    private val gitHubSearch: GitHubSearch,
+    private val connectivity: Connectivity
 ) : ViewModel() {
 
     companion object {
         private const val SEARCH_QUERY_KEY = "search_query"
         private const val SEARCH_DEBOUNCE_MS = 300L
+        /** GitHub search spends rate-limit points: wait longer, and only for 2+ characters. */
+        const val GITHUB_SEARCH_DEBOUNCE_MS = 600L
+        const val GITHUB_SEARCH_MIN_LENGTH = 2
     }
 
     // Raw search query input (immediate updates for UI)
@@ -217,6 +246,89 @@ class HomeViewModel @Inject constructor(
             }
         }
     }.cachedIn(viewModelScope)
+        // A repo whose unstar is pending leaves every list at once, but keeps its data until
+        // GitHub confirms and the Undo window ends.
+        .combine(starEngine.hiddenIds) { data, hidden -> data.filter { it.id !in hidden } }
+
+    /** GitHub-wide search for the query: debounced, 2+ characters, online only, latest wins. */
+    val gitHubSearchState: StateFlow<GitHubSearchState> = _rawSearchQuery
+        .debounce(GITHUB_SEARCH_DEBOUNCE_MS)
+        .map { it.trim() }
+        .distinctUntilChanged()
+        .transformLatest { query ->
+            when {
+                query.length < GITHUB_SEARCH_MIN_LENGTH -> emit(GitHubSearchState.Idle)
+                !connectivity.isOnline() -> emit(GitHubSearchState.Offline)
+                else -> {
+                    emit(GitHubSearchState.Loading)
+                    val result = runCatching { gitHubSearch.search(query) }
+                    result.exceptionOrNull()?.let { if (it is kotlinx.coroutines.CancellationException) throw it }
+                    emit(
+                        result.fold(
+                            onSuccess = { GitHubSearchState.Loaded(it.total, it.items) },
+                            onFailure = { GitHubSearchState.Failed(GitHubErrorText.describe(it)) }
+                        )
+                    )
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, GitHubSearchState.Idle)
+
+    /** The star control of each GitHub result on screen. */
+    val searchControlStates: StateFlow<Map<Int, StarControlState>> = gitHubSearchState
+        .flatMapLatest { state ->
+            val items = (state as? GitHubSearchState.Loaded)?.items.orEmpty()
+            if (items.isEmpty()) flowOf(emptyMap())
+            else combine(items.map { repo -> starEngine.controlState(repo.id).map { repo.id to it } }) { it.toMap() }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** The latest unstar's Undo offer. */
+    val undoOffer: StateFlow<UndoOffer?> = starEngine.undoOffer
+
+    private val refusals = MutableSharedFlow<StarMessage>(extraBufferCapacity = 8)
+
+    /** Results the person is told about: GitHub's answers and taps refused here. */
+    val starMessages: Flow<StarMessage> = merge(starEngine.messages, refusals)
+
+    /** Unstars a Home row (the swipe or its accessibility action). Refused: the row stays. */
+    suspend fun unstarFromSwipe(repo: GitHubRepository): Attempt =
+        starEngine.unstar(RepoRef(repo.id, repo.owner.login, repo.name)).also(::reportRefusal)
+
+    /** Stars or unstars a GitHub search result. */
+    fun toggleSearchStar(repo: GitHubRepository) {
+        viewModelScope.launch {
+            val ref = RepoRef(repo.id, repo.owner.login, repo.name)
+            val starred = searchControlStates.value[repo.id]?.starred == true
+            reportRefusal(if (starred) starEngine.unstar(ref) else starEngine.star(ref, repo))
+        }
+    }
+
+    fun undo(repoId: Int) {
+        viewModelScope.launch { reportRefusal(starEngine.undo(repoId)) }
+    }
+
+    /** Tries a failed star or unstar again. */
+    fun retry(message: StarMessage) {
+        viewModelScope.launch {
+            when (message) {
+                is StarMessage.UnstarFailed -> reportRefusal(starEngine.unstar(message.ref))
+                is StarMessage.StarFailed -> {
+                    val repo = (gitHubSearchState.value as? GitHubSearchState.Loaded)?.items?.find { it.id == message.ref.id }
+                    reportRefusal(starEngine.star(message.ref, repo))
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    private fun reportRefusal(attempt: Attempt) {
+        when (attempt) {
+            Attempt.Offline -> refusals.tryEmit(StarMessage.ConnectionNeeded(null))
+            is Attempt.RateLimited -> refusals.tryEmit(StarMessage.RateLimited(null, attempt.until))
+            else -> Unit
+        }
+    }
 
     fun refresh() {
         // Trigger refresh by clearing and reloading the paging data
@@ -224,6 +336,12 @@ class HomeViewModel @Inject constructor(
             gitHubRepository.refreshStarredRepositories()
         }
         refreshAccountData()
+        resumePendingUnstars()
+    }
+
+    /** Settles unstars left open by a process that was killed during the Undo window. */
+    private fun resumePendingUnstars() {
+        viewModelScope.launch { starEngine.resumePending() }
     }
 
     /** Refreshes the profile and the star lists on their own, so the starred list never waits. */
@@ -360,6 +478,7 @@ class HomeViewModel @Inject constructor(
         }
         // Home loads: bring the profile and the lists up to date.
         refreshAccountData()
+        resumePendingUnstars()
     }
 
     fun clearAllFilters() {
