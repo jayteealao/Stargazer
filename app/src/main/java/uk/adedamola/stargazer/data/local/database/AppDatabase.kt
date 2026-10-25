@@ -30,9 +30,10 @@ import androidx.room.RoomDatabase
         AccountRecord::class,
         GitHubProfileEntity::class,
         StarListEntity::class,
-        StarListItemEntity::class
+        StarListItemEntity::class,
+        PendingUnstarEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,4 +46,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun gitHubProfileDao(): GitHubProfileDao
     abstract fun starListDao(): StarListDao
+    abstract fun pendingUnstarDao(): PendingUnstarDao
 }

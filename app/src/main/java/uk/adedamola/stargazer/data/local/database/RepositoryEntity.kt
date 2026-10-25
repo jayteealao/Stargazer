@@ -73,6 +73,16 @@ interface RepositoryDao {
     @Query("SELECT * FROM repositories WHERE id = :id")
     suspend fun getRepositoryById(id: Int): RepositoryEntity?
 
+    @Query("SELECT * FROM repositories WHERE id = :id")
+    fun observeById(id: Int): Flow<RepositoryEntity?>
+
+    /** Deletes one repository; its tag assignments cascade, its favorite and pin go with the row. */
+    @Query("DELETE FROM repositories WHERE id = :id")
+    suspend fun deleteById(id: Int)
+
+    @Query("SELECT id FROM repositories")
+    suspend fun getAllIds(): List<Int>
+
     @Query("""
         SELECT * FROM repositories
         WHERE name LIKE '%' || :query || '%'

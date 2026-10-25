@@ -12,8 +12,8 @@ import javax.inject.Singleton
  * new account, in one database transaction: either all of it happens or none of it does.
  *
  * The wipe set: tag assignments, starred repositories (with their favorite and pin flags), tags,
- * saved search presets, the cached profile, the cached star lists (their items cascade) and the
- * sync state. After the commit, the in-memory progress of the starred-repo sync is reset.
+ * saved search presets, the cached profile, the cached star lists (their items cascade), the
+ * pending unstars and the sync state. After the commit, the in-memory progress of the starred-repo sync is reset.
  *
  * Any table added later that holds account-derived data must be cleared here too.
  */
@@ -35,6 +35,7 @@ class AccountDataWipe(
             database.searchPresetDao().deleteAll()
             database.gitHubProfileDao().deleteAll()
             database.starListDao().deleteAll()
+            database.pendingUnstarDao().deleteAll()
             database.syncMetadataDao().deleteAll()
             beforeCommit()
             database.accountDao().replace(account)

@@ -28,6 +28,7 @@ import dagger.hilt.components.SingletonComponent
 import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
+import uk.adedamola.stargazer.data.local.database.PendingUnstarDao
 import uk.adedamola.stargazer.data.local.database.StarListDao
 import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.local.database.RepositoryTagDao
@@ -59,6 +60,12 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+/** Adds the pending-unstar table. SQL copied from schema 7.json. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `pending_unstars` (`repositoryId` INTEGER NOT NULL, `owner` TEXT NOT NULL, `name` TEXT NOT NULL, `state` TEXT NOT NULL, `windowEndsAt` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`repositoryId`))")
+    }
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -109,6 +116,11 @@ class DatabaseModule {
     }
 
     @Provides
+    fun providePendingUnstarDao(appDatabase: AppDatabase): PendingUnstarDao {
+        return appDatabase.pendingUnstarDao()
+    }
+
+    @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext appContext: Context): AppDatabase {
         return Room.databaseBuilder(
@@ -116,7 +128,7 @@ class DatabaseModule {
                 AppDatabase::class.java,
                 "Stargazer"
             )
-            .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .fallbackToDestructiveMigration(false)
             .build()
     }
