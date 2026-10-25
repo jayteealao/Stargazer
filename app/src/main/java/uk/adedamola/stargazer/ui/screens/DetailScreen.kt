@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,6 +61,7 @@ import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
 import uk.adedamola.stargazer.ui.theme.FactoryYellow
+import uk.adedamola.stargazer.ui.theme.safeBars
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,8 +82,10 @@ fun DetailScreen(
 
     Scaffold(
         containerColor = FactoryDarkGrey,
+        contentWindowInsets = WindowInsets.safeBars,
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets.safeBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                 title = {
                     Text(
                         text = repoName?.split("/")?.lastOrNull()?.uppercase() ?: "REPOSITORY",
