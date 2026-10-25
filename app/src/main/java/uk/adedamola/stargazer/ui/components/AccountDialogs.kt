@@ -206,7 +206,8 @@ fun AccountAvatar(summary: AccountSummary, modifier: Modifier = Modifier, size: 
     ) {
         Text(
             text = initials(summary),
-            style = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 11.sp),
+            // 11sp at the dialogs' 32dp, scaled with the circle for the header and the profile.
+            style = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = (size.value * 11f / 32f).sp),
             color = FactoryDarkGrey
         )
         if (!summary.avatarUrl.isNullOrBlank()) {
