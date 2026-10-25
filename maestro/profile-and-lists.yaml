@@ -1,6 +1,8 @@
 # The signed-in account in the drawer, the GitHub star lists as a Home filter, and the
 # profile screen offline: captures the drawer header, the lists, a selected list, the
-# filtered Home and the profile with its saved-copy line.
+# filtered Home and the profile with its saved-copy line. The fixture has five lists, so the
+# lists section starts folded: the flow opens it, then folds it again after picking a list
+# to see the header name the selected list.
 #
 # Needs a signed-in fixture account with a cached profile and lists and no GitHub account:
 # run the instrumented seed first (ProfileFixtureSeed with -e profileFixture default), then
@@ -20,6 +22,9 @@ appId: uk.adedamola.stargazer
 - assertVisible: "@ada-builds"
 - takeScreenshot: ${OUT}/drawer-account-header
 - assertVisible: "STAR_LISTS"
+- assertNotVisible: "ALL_LISTS"
+- takeScreenshot: ${OUT}/drawer-star-lists-collapsed
+- tapOn: "STAR_LISTS"
 - assertVisible: "ANDROID LIBRARIES"
 - assertVisible: "RUST TOOLS"
 - takeScreenshot: ${OUT}/drawer-star-lists
@@ -27,6 +32,10 @@ appId: uk.adedamola.stargazer
 - tapOn: "RUST TOOLS"
 - assertVisible: "LIST: RUST TOOLS"
 - takeScreenshot: ${OUT}/drawer-list-selected
+- tapOn: "STAR_LISTS"
+- assertNotVisible: "ALL_LISTS"
+- assertVisible: "RUST TOOLS"
+- takeScreenshot: ${OUT}/drawer-list-selected-collapsed
 - tapOn: "APPLY_FILTERS"
 - extendedWaitUntil:
     notVisible: "STARGAZER_SYSTEM"
