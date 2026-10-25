@@ -16,6 +16,7 @@ import org.junit.runner.RunWith
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.di.MIGRATION_4_5
 import uk.adedamola.stargazer.data.local.di.MIGRATION_5_6
+import uk.adedamola.stargazer.data.local.di.MIGRATION_6_7
 
 /** Proves the version 5 to 6 upgrade keeps every existing row and adds the new tables. */
 @RunWith(AndroidJUnit4::class)
@@ -55,6 +56,35 @@ class DatabaseMigrationTest {
     }
 
     @Test
+    fun migrate6To7_keepsEveryRow() {
+        helper.createDatabase(TEST_DB, 6).use { db ->
+            seed(db, version = 6)
+            db.insert("account", SQLiteDatabase.CONFLICT_ABORT, ContentValues().apply {
+                put("userId", 5901851L); put("login", "ada-builds"); put("avatarUrl", ""); put("recordedAt", 1L)
+            })
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7)
+
+        assertSeededRows(db, version = 6)
+        assertEquals(1, count(db, "SELECT COUNT(*) FROM account"))
+        assertEquals(0, count(db, "SELECT COUNT(*) FROM pending_unstars"))
+        assertNoForeignKeyViolations(db)
+    }
+
+    @Test
+    fun migrate4To7() {
+        helper.createDatabase(TEST_DB, 4).use { seed(it, version = 4) }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+
+        assertSeededRows(db, version = 4)
+        assertNewTablesEmpty(db)
+        assertEquals(0, count(db, "SELECT COUNT(*) FROM pending_unstars"))
+        assertNoForeignKeyViolations(db)
+    }
+
+    @Test
     fun openWithRoomAfterMigration() {
         helper.createDatabase(TEST_DB, 5).use { seed(it, version = 5) }
 
@@ -86,7 +116,7 @@ class DatabaseMigrationTest {
 
     private fun openWithRoom(): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, TEST_DB)
-            .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
 
     // Seed: three repositories (one with every nullable column null, one favorite and pinned,
