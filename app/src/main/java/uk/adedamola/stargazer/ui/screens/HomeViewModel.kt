@@ -44,6 +44,9 @@ import uk.adedamola.stargazer.data.repository.RepoRef
 import uk.adedamola.stargazer.data.repository.StarControlState
 import uk.adedamola.stargazer.data.repository.StarEngine
 import uk.adedamola.stargazer.data.repository.StarMessage
+import uk.adedamola.stargazer.data.repository.Outcome
+import uk.adedamola.stargazer.data.repository.Prepared
+import uk.adedamola.stargazer.data.repository.StarReconciler
 import uk.adedamola.stargazer.data.repository.UndoOffer
 import uk.adedamola.stargazer.data.repository.RefreshStatus
 import uk.adedamola.stargazer.data.repository.StarListRepository
@@ -92,7 +95,8 @@ class HomeViewModel @Inject constructor(
     profileDao: GitHubProfileDao,
     private val starEngine: StarEngine,
     private val gitHubSearch: GitHubSearch,
-    private val connectivity: Connectivity
+    private val connectivity: Connectivity,
+    private val reconciler: StarReconciler
 ) : ViewModel() {
 
     companion object {
@@ -330,6 +334,19 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private val _reconciling = MutableStateFlow(false)
+
+    /** True while a pull-to-refresh reads GitHub's whole starred list. */
+    val reconciling: StateFlow<Boolean> = _reconciling.asStateFlow()
+
+    private val _removalNotice = MutableStateFlow<Int?>(null)
+
+    /** How many repos the first reconcile after a sign-in would remove; null when nothing waits. */
+    val removalNotice: StateFlow<Int?> = _removalNotice.asStateFlow()
+
+    /** The read the removal notice is about, removed on Continue. */
+    private var heldRemoval: Prepared.Ready? = null
+
     fun refresh() {
         // Trigger refresh by clearing and reloading the paging data
         viewModelScope.launch {
@@ -337,6 +354,43 @@ class HomeViewModel @Inject constructor(
         }
         refreshAccountData()
         resumePendingUnstars()
+        reconcile()
+    }
+
+    /**
+     * Removes the repos GitHub no longer lists as starred (pull-to-refresh only; app start and
+     * background sync never remove). A failed read removes nothing and says nothing: the paging
+     * refresh shows its own error, and the next pull tries again.
+     */
+    private fun reconcile() {
+        if (_removalNotice.value != null) return
+        _reconciling.value = true
+        viewModelScope.launch {
+            try {
+                val outcome = reconciler.reconcile()
+                if (outcome is Outcome.NoticeNeeded) {
+                    heldRemoval = outcome.prepared
+                    _removalNotice.value = outcome.count
+                }
+            } finally {
+                _reconciling.value = false
+            }
+        }
+    }
+
+    /** Continue on the removal notice: the repos it counted leave, with their local data. */
+    fun confirmRemoval() {
+        val held = heldRemoval ?: return
+        heldRemoval = null
+        _removalNotice.value = null
+        _reconciling.value = true
+        viewModelScope.launch {
+            try {
+                reconciler.apply(held)
+            } finally {
+                _reconciling.value = false
+            }
+        }
     }
 
     /** Settles unstars left open by a process that was killed during the Undo window. */
@@ -465,6 +519,9 @@ class HomeViewModel @Inject constructor(
         // a selected tag, preset or language of the old account must not filter the new list.
         viewModelScope.launch {
             accountDao.observe().map { it?.userId }.distinctUntilChanged().drop(1).collect {
+                // A notice about the old account's repos no longer applies.
+                heldRemoval = null
+                _removalNotice.value = null
                 clearAllFilters()
                 refreshAccountData()
             }
