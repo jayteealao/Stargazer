@@ -9,9 +9,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +63,7 @@ import uk.adedamola.stargazer.ui.components.SearchBar
 import uk.adedamola.stargazer.ui.components.TagAssignmentSheet
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
+import uk.adedamola.stargazer.ui.theme.safeBars
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +102,8 @@ fun HomeScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = FactoryDarkGrey
+                drawerContainerColor = FactoryDarkGrey,
+                windowInsets = WindowInsets.safeBars.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)
             ) {
                 FilterDrawerContent(
                     sortOption = sortOption,
@@ -135,8 +140,10 @@ fun HomeScreen(
     ) {
         Scaffold(
             containerColor = FactoryDarkGrey,
+            contentWindowInsets = WindowInsets.safeBars,
             topBar = {
                 TopAppBar(
+                    windowInsets = WindowInsets.safeBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
                     title = {
                         Text(
                             text = "STARGAZER",
