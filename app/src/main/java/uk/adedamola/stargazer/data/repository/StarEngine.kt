@@ -20,7 +20,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
 import retrofit2.Response
-import uk.adedamola.stargazer.data.di.StarScope
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.PendingUnstarEntity
 import uk.adedamola.stargazer.data.mappers.toEntity
@@ -30,8 +29,6 @@ import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** One repository as GitHub's star endpoints name it. */
 data class RepoRef(val id: Int, val owner: String, val name: String) {
@@ -89,7 +86,7 @@ data class StarControlState(
  * One request at a time per repository; offline and rate-limited taps send nothing. A 401 goes
  * through the app's access-ended path on the HTTP client. Nothing here logs a key or a body.
  */
-@Singleton
+/** Built for the app by `StarModule`, with the real clock and the app-wide star scope. */
 class StarEngine(
     private val api: GitHubApiService,
     private val database: AppDatabase,
@@ -99,13 +96,6 @@ class StarEngine(
     private val sleep: suspend (Long) -> Unit,
     private val windowMillis: Long = WINDOW_MILLIS,
 ) {
-    @Inject
-    constructor(
-        api: GitHubApiService,
-        database: AppDatabase,
-        connectivity: Connectivity,
-        @StarScope scope: CoroutineScope,
-    ) : this(api, database, connectivity, System::currentTimeMillis, scope, { delay(it) })
 
     private val pendingDao = database.pendingUnstarDao()
     private val repositoryDao = database.repositoryDao()

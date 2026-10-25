@@ -9,6 +9,10 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import uk.adedamola.stargazer.data.local.database.AppDatabase
+import uk.adedamola.stargazer.data.remote.api.GitHubApiService
+import uk.adedamola.stargazer.data.repository.StarEngine
 import uk.adedamola.stargazer.data.remote.AndroidConnectivity
 import uk.adedamola.stargazer.data.remote.Connectivity
 import javax.inject.Qualifier
@@ -31,4 +35,13 @@ object StarModule {
     @Singleton
     @StarScope
     fun provideStarScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Provides
+    @Singleton
+    fun provideStarEngine(
+        api: GitHubApiService,
+        database: AppDatabase,
+        connectivity: Connectivity,
+        @StarScope scope: CoroutineScope,
+    ): StarEngine = StarEngine(api, database, connectivity, System::currentTimeMillis, scope, { delay(it) })
 }
