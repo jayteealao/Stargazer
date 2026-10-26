@@ -22,3 +22,6 @@ ASSESSMENT.md
 signing.properties
 *.jks
 *.keystore
+
+# The records of the /wf workflows live in the records repo
+.ai/workflows/
