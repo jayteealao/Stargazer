@@ -1,0 +1,19 @@
+# Added by wf ship-plan build — plan v1, 2026-10-28
+# Install once per clone: lefthook install. The pre-commit hook needs gitleaks on PATH.
+
+pre-commit:
+  commands:
+    gitleaks:
+      run: gitleaks git --staged --redact --no-banner
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: >-
+        head -n1 {1} | grep -Eq '^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+|Merge .+|Revert ".+"|(fixup|squash|amend)! .+)'
+        || { echo "The commit subject must follow Conventional Commits, for example: feat: add a star list filter"; exit 1; }
+
+pre-push:
+  commands:
+    unit-tests:
+      run: ./gradlew --no-daemon testDebugUnitTest
