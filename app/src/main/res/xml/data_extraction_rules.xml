@@ -15,21 +15,19 @@
   -->
 
 <!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Backup and device-transfer rules for API 31 and later. Everything is backed up except the
+   directory that holds the encrypted GitHub access key (restored ciphertext could not be
+   decrypted without its Keystore key, so the person signs in again after a restore) and the
+   earlier version's preferences file, which can still hold its plain-text token until the app
+   has checked it once.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="access_key/"/>
+        <exclude domain="file" path="datastore/auth_preferences.preferences_pb"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="access_key/"/>
+        <exclude domain="file" path="datastore/auth_preferences.preferences_pb"/>
     </device-transfer>
-    -->
 </data-extraction-rules>

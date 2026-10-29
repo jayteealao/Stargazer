@@ -25,7 +25,11 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.local.database.AppDatabase
+import uk.adedamola.stargazer.data.local.database.GitHubProfileDao
+import uk.adedamola.stargazer.data.local.database.PendingUnstarDao
+import uk.adedamola.stargazer.data.local.database.StarListDao
 import uk.adedamola.stargazer.data.local.database.RepositoryDao
 import uk.adedamola.stargazer.data.local.database.RepositoryTagDao
 import uk.adedamola.stargazer.data.local.database.SearchPresetDao
@@ -45,6 +49,23 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/** Adds the account record, GitHub profile and star-list tables. SQL copied from schema 6.json. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `account` (`userId` INTEGER NOT NULL, `login` TEXT NOT NULL, `avatarUrl` TEXT NOT NULL, `recordedAt` INTEGER NOT NULL, PRIMARY KEY(`userId`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `github_profile` (`userId` INTEGER NOT NULL, `login` TEXT NOT NULL, `name` TEXT, `avatarUrl` TEXT NOT NULL, `bio` TEXT, `followers` INTEGER NOT NULL, `following` INTEGER NOT NULL, `publicRepos` INTEGER NOT NULL, `starredCount` INTEGER, `location` TEXT, `company` TEXT, `blog` TEXT, `htmlUrl` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`userId`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `star_lists` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `isPrivate` INTEGER NOT NULL, `itemCount` INTEGER NOT NULL, `position` INTEGER NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `star_list_items` (`listId` TEXT NOT NULL, `repositoryId` INTEGER NOT NULL, PRIMARY KEY(`listId`, `repositoryId`), FOREIGN KEY(`listId`) REFERENCES `star_lists`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_star_list_items_repositoryId` ON `star_list_items` (`repositoryId`)")
+    }
+}
+
+/** Adds the pending-unstar table. SQL copied from schema 7.json. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `pending_unstars` (`repositoryId` INTEGER NOT NULL, `owner` TEXT NOT NULL, `name` TEXT NOT NULL, `state` TEXT NOT NULL, `windowEndsAt` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`repositoryId`))")
+    }
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -80,6 +101,26 @@ class DatabaseModule {
     }
 
     @Provides
+    fun provideAccountDao(appDatabase: AppDatabase): AccountDao {
+        return appDatabase.accountDao()
+    }
+
+    @Provides
+    fun provideGitHubProfileDao(appDatabase: AppDatabase): GitHubProfileDao {
+        return appDatabase.gitHubProfileDao()
+    }
+
+    @Provides
+    fun provideStarListDao(appDatabase: AppDatabase): StarListDao {
+        return appDatabase.starListDao()
+    }
+
+    @Provides
+    fun providePendingUnstarDao(appDatabase: AppDatabase): PendingUnstarDao {
+        return appDatabase.pendingUnstarDao()
+    }
+
+    @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext appContext: Context): AppDatabase {
         return Room.databaseBuilder(
@@ -87,7 +128,7 @@ class DatabaseModule {
                 AppDatabase::class.java,
                 "Stargazer"
             )
-            .addMigrations(MIGRATION_4_5)
+            .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .fallbackToDestructiveMigration(false)
             .build()
     }

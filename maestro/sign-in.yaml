@@ -1,0 +1,31 @@
+# GitHub sign-in up to the code page: the sign-in screen on a fresh install, the code with
+# its countdown, then the in-app browser tab on github.com/login/device after
+# "Copy code & open GitHub". No GitHub account is used: the code is never entered.
+#
+# Each run asks GitHub for one real code (GitHub allows 50 per hour per app).
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/sign-in.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "SIGN IN WITH GITHUB"
+    timeout: 20000
+- assertVisible: "Sign in with GitHub to sync your stars, lists and profile."
+- takeScreenshot: ${OUT}/01-idle
+
+- tapOn: "SIGN IN WITH GITHUB"
+- extendedWaitUntil:
+    visible: "COPY CODE & OPEN GITHUB"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "[A-Z0-9]{4}-[A-Z0-9]{4}"
+    timeout: 20000
+- assertVisible: "enter on github.com · .* left"
+- takeScreenshot: ${OUT}/02-code
+
+- tapOn: "COPY CODE & OPEN GITHUB"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ${OUT}/03-custom-tab

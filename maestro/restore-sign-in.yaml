@@ -1,0 +1,12 @@
+# After a backup, an uninstall and a restore: the app opens on sign-in (no key came back)
+# and shows no access-ended notice. Seed first with AccountRestoreCheck (-e restoreSeed true).
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/restore-sign-in.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "SIGN IN WITH GITHUB"
+    timeout: 30000
+- assertNotVisible: "GITHUB_ACCESS_ENDED"
+- takeScreenshot: ${OUT}/restored-sign-in

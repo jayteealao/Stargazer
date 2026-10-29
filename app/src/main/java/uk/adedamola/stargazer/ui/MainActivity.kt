@@ -1,8 +1,11 @@
 package uk.adedamola.stargazer.ui
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import uk.adedamola.stargazer.ui.theme.StargazerTheme
@@ -15,6 +18,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // The theme is always dark, so both bars keep light icons whatever the system mode.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+        )
 
         splashScreen.setKeepOnScreenCondition {
             navigationViewModel.authState.value is AuthState.Loading

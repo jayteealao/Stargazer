@@ -1,5 +1,11 @@
 package uk.adedamola.stargazer.ui.components
 
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,20 +62,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import uk.adedamola.stargazer.data.auth.AccountSummary
+import uk.adedamola.stargazer.data.local.database.StarListEntity
 import uk.adedamola.stargazer.data.local.database.Tag
+import uk.adedamola.stargazer.data.repository.RefreshStatus
 import uk.adedamola.stargazer.data.repository.SortOption
 import uk.adedamola.stargazer.ui.theme.FactoryCyan
 import uk.adedamola.stargazer.ui.theme.FactoryDarkGrey
 import uk.adedamola.stargazer.ui.theme.FactoryOrange
+import uk.adedamola.stargazer.ui.theme.FactoryTextWhite
 import uk.adedamola.stargazer.ui.theme.FactoryYellow
 import kotlin.math.roundToInt
+
+/** Up to this many star lists, the STAR_LISTS section starts open; above it, folded. */
+private const val STAR_LISTS_OPEN_MAX = 4
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -97,13 +112,24 @@ fun FilterDrawerContent(
     onClearFilters: () -> Unit,
     onApplyFilters: () -> Unit,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    account: AccountSummary? = null,
+    starLists: List<StarListEntity> = emptyList(),
+    selectedListId: String? = null,
+    listsStatus: RefreshStatus = RefreshStatus.Idle,
+    onListSelect: (String?) -> Unit = {},
+    onListsRetry: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
     // Collapsible section states
     var expandedPresets by remember { mutableStateOf(false) }
     var expandedSort by remember { mutableStateOf(true) }
     var expandedFilters by remember { mutableStateOf(true) }
     var expandedTags by remember { mutableStateOf(false) }
+    // null until the person taps the header; until then the list count decides.
+    var listsChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val expandedLists = listsChoice ?: (starLists.size <= STAR_LISTS_OPEN_MAX)
+    val selectedList = starLists.find { it.id == selectedListId }
 
     Box(
         modifier = modifier
@@ -113,7 +139,8 @@ fun FilterDrawerContent(
     ) {
         // Calculate hasActiveFilters here so it's accessible throughout the Box
         val hasActiveFilters = showFavoritesOnly || showPinnedOnly || selectedTag != null ||
-                               selectedLanguage != null || (minStars != null && maxStars != null)
+                               selectedLanguage != null || (minStars != null && maxStars != null) ||
+                               selectedListId != null
 
         Column(
             modifier = Modifier
@@ -138,6 +165,13 @@ fun FilterDrawerContent(
                 fontFamily = FontFamily.Monospace,
                 color = FactoryOrange
             )
+        }
+
+        // The linked GitHub account; a tap opens the profile.
+        if (account != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            DrawerAccountHeader(account = account, onClick = onProfileClick)
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -261,6 +295,31 @@ fun FilterDrawerContent(
                         )
                     }
 
+                    if (selectedListId != null) {
+                        AssistChip(
+                            onClick = { onListSelect(null) },
+                            label = {
+                                Text(
+                                    text = "LIST: ${(selectedList?.name ?: "").uppercase()}",
+                                    fontFamily = FontFamily.Monospace,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = FactoryCyan.copy(alpha = 0.2f),
+                                labelColor = FactoryCyan,
+                                trailingIconContentColor = FactoryCyan
+                            )
+                        )
+                    }
+
                     if (selectedTag != null) {
                         val tagColor = try {
                             Color(android.graphics.Color.parseColor(selectedTag.color))
@@ -324,11 +383,33 @@ fun FilterDrawerContent(
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
+        // GitHub star lists (read-only): a selected list filters Home.
+        SectionHeader(
+            text = "STAR_LISTS",
+            icon = Icons.AutoMirrored.Filled.List,
+            isExpanded = expandedLists,
+            onToggle = { listsChoice = !expandedLists },
+            // While folded, the header names the selected list so the choice stays visible.
+            detail = if (!expandedLists) selectedList?.name?.uppercase() else null
+        )
+        if (expandedLists) {
+            StarListsSection(
+                lists = starLists,
+                selectedId = selectedListId,
+                status = listsStatus,
+                onSelect = onListSelect,
+                onRetry = onListsRetry
+            )
+        }
+
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
         // Search Presets Section
         var showSavePresetDialog by remember { mutableStateOf(false) }
 
         SectionHeader(
-            text = "🔍 PRESETS",
+            text = "PRESETS",
+            icon = Icons.Filled.Search,
             isExpanded = expandedPresets,
             onToggle = { expandedPresets = !expandedPresets }
         )
@@ -547,14 +628,14 @@ fun FilterDrawerContent(
                 }
             }
 
-            // Logout Button
+            // Sign out: deletes the key only; local stars, favorites, pins and tags stay.
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(
                 onClick = onLogout,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "[ DISCONNECT_SESSION ]",
+                    text = "[ SIGN_OUT ]",
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.error
                 )
@@ -567,27 +648,59 @@ fun FilterDrawerContent(
 private fun SectionHeader(
     text: String,
     isExpanded: Boolean = true,
-    onToggle: (() -> Unit)? = null
+    onToggle: (() -> Unit)? = null,
+    /** Drawn before the title in the header tint; decorative, the title names the section. */
+    icon: ImageVector? = null,
+    /** Short text after the title, one line with an ellipsis; the expand icon always stays visible. */
+    detail: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = onToggle != null) { onToggle?.invoke() }
+            .clickable(
+                enabled = onToggle != null,
+                role = Role.Button,
+                onClickLabel = if (isExpanded) "Collapse" else "Expand"
+            ) { onToggle?.invoke() }
+            .then(
+                if (onToggle != null) {
+                    Modifier.semantics { stateDescription = if (isExpanded) "Expanded" else "Collapsed" }
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            color = FactoryCyan
-        )
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(imageVector = icon, contentDescription = null, tint = FactoryCyan, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = FactoryCyan
+            )
+            if (detail != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = FactoryTextWhite,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
         if (onToggle != null) {
             Icon(
                 imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                contentDescription = null,
                 tint = FactoryCyan,
                 modifier = Modifier.size(20.dp)
             )

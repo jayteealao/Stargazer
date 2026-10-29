@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"     # e.g., v1.4.0, v2.0.0-rc.1
 
+# Added by wf ship-plan build — plan v1, 2026-10-28
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -71,9 +76,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Added by wf ship-plan build — plan v1, 2026-10-28: the build reads no google-services.json, so an empty secret skips this step
           if [ -z "${GOOGLE_SERVICES_JSON_B64:-}" ]; then
-          echo "GOOGLE_SERVICES_JSON_B64 is empty."
-          exit 1
+          echo "GOOGLE_SERVICES_JSON_B64 not provided, skipping..."
+          exit 0
           fi
 
           mkdir -p app
@@ -115,6 +121,10 @@ jobs:
 
           # Find APK (case-insensitive for release/Release)
           APK=$(find . -type f -path "*/build/outputs/apk/*elease/*.apk" ! -name "*-unsigned.apk" ! -name "*-unaligned.apk" | head -n1)
+          # Added by wf ship-plan build — plan v2, 2026-10-29: with no signing secrets, publish the unsigned APK
+          if [ -z "$APK" ]; then
+            APK=$(find . -type f -path "*/build/outputs/apk/*elease/*-unsigned.apk" | head -n1)
+          fi
           AAB=$(find . -type f -path "*/build/outputs/bundle/*elease/*.aab" | head -n1)
           MAP=$(find . -type f -path "*/build/outputs/mapping/*elease/mapping.txt" | head -n1 || true)
 
@@ -195,3 +205,29 @@ jobs:
             ${{ steps.find_outputs.outputs.aab }}
             ${{ steps.find_outputs.outputs.mapping }}
             CHANGELOG-${{ steps.find_outputs.outputs.tag }}.md
+
+  # Added by wf ship-plan build — plan v1, 2026-10-28
+  verify-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check github-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          MAX_WAIT=$(( 30 * 60 ))
+          ELAPSED=0
+          while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+            STATE=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '[.tagName, .isDraft] | @tsv' || true)
+            if [ "$STATE" = "$(printf '%s\tfalse' "$TAG")" ]; then
+              echo "Check passed: $TAG is published"
+              exit 0
+            fi
+            sleep 60
+            ELAPSED=$(( ELAPSED + 60 ))
+          done
+          echo "Check timed out after 30 minutes: $TAG is missing or still a draft"
+          exit 1

@@ -64,14 +64,20 @@ fun RepoCard(
     tags: List<Tag> = emptyList(),
     onFavoriteClick: () -> Unit = {},
     onPinClick: () -> Unit = {},
-    onTagsClick: () -> Unit = {}
+    onTagsClick: () -> Unit = {},
+    /** Shown in place of the pin and favorite buttons, e.g. a GitHub star control. */
+    trailing: (@Composable () -> Unit)? = null,
+    /** False hides the tag chips and the add-tag control (repos that are not starred here). */
+    showTags: Boolean = true,
+    /** Keeps shared-element keys apart when the same repo can show twice on one screen. */
+    sharedKeyPrefix: String = ""
 ) {
     with(sharedTransitionScope) {
         Card(
             modifier = modifier
                 .fillMaxWidth()
                 .sharedBounds(
-                    sharedContentState = rememberSharedContentState(key = "card-$repoId"),
+                    sharedContentState = rememberSharedContentState(key = "card-$sharedKeyPrefix$repoId"),
                     animatedVisibilityScope = animatedVisibilityScope
                 )
                 .border(BorderStroke(1.dp, FactoryBorder)),
@@ -99,7 +105,7 @@ fun RepoCard(
                             contentDescription = "Owner avatar",
                             modifier = Modifier
                                 .sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = "avatar-$repoId"),
+                                    sharedContentState = rememberSharedContentState(key = "avatar-$sharedKeyPrefix$repoId"),
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
                                 .size(40.dp)
@@ -113,7 +119,7 @@ fun RepoCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = "owner-$repoId"),
+                                    sharedContentState = rememberSharedContentState(key = "owner-$sharedKeyPrefix$repoId"),
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
                             )
@@ -122,7 +128,7 @@ fun RepoCard(
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = "name-$repoId"),
+                                    sharedContentState = rememberSharedContentState(key = "name-$sharedKeyPrefix$repoId"),
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
                             )
@@ -130,7 +136,9 @@ fun RepoCard(
                     }
 
                 // Action Icons
-                Row {
+                if (trailing != null) {
+                    trailing()
+                } else Row {
                     IconButton(
                         onClick = onPinClick,
                         modifier = Modifier.size(40.dp)
@@ -165,7 +173,9 @@ fun RepoCard(
             )
 
             // Tags
-            if (tags.isNotEmpty()) {
+            if (!showTags) {
+                // No tag chips for a repo that is not starred on this phone.
+            } else if (tags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -254,7 +264,7 @@ fun RepoCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.sharedElement(
-                        sharedContentState = rememberSharedContentState(key = "stars-$repoId"),
+                        sharedContentState = rememberSharedContentState(key = "stars-$sharedKeyPrefix$repoId"),
                         animatedVisibilityScope = animatedVisibilityScope
                     )
                 )

@@ -1,0 +1,13 @@
+# Access ended: with a key that GitHub rejects stored (SignInFixtureSeed with
+# -e fixtureKey <plain value>), Home's first refresh gets a 401 and the app returns to
+# sign-in with the access-ended notice. The emulator must be online.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/access-ended.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "GITHUB_ACCESS_ENDED"
+    timeout: 30000
+- assertVisible: "SIGN IN WITH GITHUB"
+- takeScreenshot: ${OUT}/access-ended

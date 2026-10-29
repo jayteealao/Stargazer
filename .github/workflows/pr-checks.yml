@@ -1,0 +1,106 @@
+# Added by wf ship-plan build — plan v1, 2026-10-28
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Fix gradlew perms & line endings
+        run: |
+          sed -i 's/\r$//' gradlew
+          chmod +x gradlew
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-36 build-tools;36.0.0
+
+      - name: unit-tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+  commit-messages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages (Conventional Commits)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+|Revert ".+")'
+          bad=0
+          while IFS= read -r line; do
+            sha="${line%% *}"
+            subject="${line#* }"
+            if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+              echo "::error::$sha: \"$subject\" does not follow Conventional Commits (for example: feat: add a star list filter)"
+              bad=1
+            fi
+          done < <(git log --no-merges --format='%h %s' "$BASE_SHA..$HEAD_SHA")
+          exit "$bad"
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-dry-run:
+    needs: [unit-tests, commit-messages, secret-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Fix gradlew perms & line endings
+        run: |
+          sed -i 's/\r$//' gradlew
+          chmod +x gradlew
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-36 build-tools;36.0.0
+
+      # No signing settings here, so the release APK is built unsigned; this proves the release build compiles.
+      - name: Publish dry-run
+        run: ./gradlew --no-daemon clean assembleRelease bundleRelease

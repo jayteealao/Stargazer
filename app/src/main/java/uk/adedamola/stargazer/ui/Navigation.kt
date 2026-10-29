@@ -14,7 +14,8 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
 import uk.adedamola.stargazer.ui.screens.DetailScreen
 import uk.adedamola.stargazer.ui.screens.HomeScreen
-import uk.adedamola.stargazer.ui.screens.LoginScreen
+import uk.adedamola.stargazer.ui.screens.ProfileRoute
+import uk.adedamola.stargazer.ui.screens.SignInRoute
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,9 +28,10 @@ import javax.inject.Inject
 
 // Navigation 3 uses keys (Any) instead of routes (Strings)
 sealed interface Screen {
-    data object Login : Screen
+    data object SignIn : Screen
     data object Home : Screen
     data class Detail(val repoName: String, val repoId: Int) : Screen
+    data object Profile : Screen
 }
 
 sealed interface AuthState {
@@ -59,7 +61,9 @@ fun StargazerApp(
     // Don't render anything while auth state is loading — the native splash screen stays visible
     if (authState == AuthState.Loading) return
 
-    val initialScreen = if (authState == AuthState.Authenticated) Screen.Home else Screen.Login
+    // A stored key opens Home; deleting it (sign-out, or GitHub rejecting it) rebuilds the
+    // stack on sign-in from any screen, and storing a new key opens Home by itself.
+    val initialScreen = if (authState == AuthState.Authenticated) Screen.Home else Screen.SignIn
     val backStack = remember(authState) {
         mutableStateListOf<Any>(initialScreen)
     }
@@ -73,13 +77,8 @@ fun StargazerApp(
             backStack = backStack,
             onBack = { backStack.removeLastOrNull() },
             entryProvider = entryProvider {
-                entry<Screen.Login> {
-                    LoginScreen(
-                        onLoginSuccess = {
-                            backStack.clear()
-                            backStack.add(Screen.Home)
-                        }
-                    )
+                entry<Screen.SignIn> {
+                    SignInRoute()
                 }
                 entry<Screen.Home> {
                     HomeScreen(
@@ -87,8 +86,12 @@ fun StargazerApp(
                             backStack.add(Screen.Detail(repoName, repoId))
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedVisibilityScope = LocalNavAnimatedContentScope.current
+                        animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+                        onProfileClick = { backStack.add(Screen.Profile) }
                     )
+                }
+                entry<Screen.Profile> {
+                    ProfileRoute(onBack = { backStack.removeLastOrNull() })
                 }
                 entry<Screen.Detail> { key ->
                     DetailScreen(

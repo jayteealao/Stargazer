@@ -8,6 +8,7 @@ import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.local.database.RepositoryEntity
 import uk.adedamola.stargazer.data.local.database.SyncMetadata
 import uk.adedamola.stargazer.data.mappers.toEntity
+import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,6 +60,11 @@ class StarredReposRemoteMediator @Inject constructor(
     private val _syncProgress = MutableStateFlow(SyncProgress())
     val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
 
+    /** Forgets the progress of the previous account's sync, after its data was removed. */
+    fun resetSyncProgress() {
+        _syncProgress.value = SyncProgress()
+    }
+
     /**
      * Always trigger initial refresh to check for new starred repos.
      */
@@ -79,7 +85,7 @@ class StarredReposRemoteMediator @Inject constructor(
         } catch (e: Exception) {
             _syncProgress.value = _syncProgress.value.copy(
                 isLoading = false,
-                error = e.message
+                error = GitHubErrorText.describe(e)
             )
             MediatorResult.Error(e)
         }
@@ -174,12 +180,15 @@ class StarredReposRemoteMediator @Inject constructor(
             isLoading = true
         )
 
-        // Get the newest starred_at from local database
-        val localNewestStarredAt = repoDao.getNewestStarredAt() ?: metadata.newestStarredAt ?: 0L
+        // The cutoff is the newest star time this sync has read from GitHub. A row starred in the
+        // app carries the phone's clock, so the newest local row could skip stars made elsewhere.
+        // The local maximum is only a fallback for data synced before the cutoff was recorded, and
+        // it is never stored: only a star time read from GitHub becomes the next cutoff.
+        val localNewestStarredAt = metadata.newestStarredAt ?: repoDao.getNewestStarredAt() ?: 0L
 
         var page = 1
         var totalLoaded = 0
-        var newestStarredAt = localNewestStarredAt
+        var newestStarredAt: Long? = metadata.newestStarredAt
         var shouldContinue = true
 
         while (shouldContinue) {
@@ -207,7 +216,7 @@ class StarredReposRemoteMediator @Inject constructor(
 
                 // Update newest starred_at if we found newer repos
                 val pageNewest = newRepos.maxOfOrNull { it.starredAt ?: 0L } ?: 0L
-                if (pageNewest > newestStarredAt) {
+                if (pageNewest > (newestStarredAt ?: 0L)) {
                     newestStarredAt = pageNewest
                 }
             }

@@ -1,0 +1,6 @@
+# Copy to signing.properties (git-ignored) and fill in. See docs/release-signing.md.
+# Use forward slashes in paths; a relative path is read from the repository root.
+SIGNING_STORE_FILE=
+SIGNING_STORE_PASSWORD=
+SIGNING_KEY_ALIAS=
+SIGNING_KEY_PASSWORD=

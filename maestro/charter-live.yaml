@@ -1,0 +1,75 @@
+# The signed-in account end to end, read only: the drawer with the account header and the
+# GitHub star lists, Home filtered by the first list, then the profile screen.
+#
+# Needs a signed-in account with at least one star list. On a real GitHub account, the
+# account owner first approves a sign-in code (maestro/sign-in-approve.yaml). The flow
+# touches no star control and types nothing; it picks the first list by position, so it
+# runs on any account. At the end it clears the list filter again. It opens the star lists
+# section when it starts folded.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/charter-live.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Open menu"
+    timeout: 60000
+
+# The drawer: account header and star lists.
+- tapOn: "Open menu"
+- extendedWaitUntil:
+    visible: "STAR_LISTS"
+    timeout: 60000
+# More than four lists start folded: open the section, and tap again if a tap landed while
+# the lists were still loading.
+- repeat:
+    while:
+      notVisible: "ALL_LISTS"
+    times: 4
+    commands:
+      - tapOn: "STAR_LISTS"
+      - extendedWaitUntil:
+          visible: "ALL_LISTS"
+          timeout: 15000
+          optional: true
+- extendedWaitUntil:
+    visible: "ALL_LISTS"
+    timeout: 60000
+- assertVisible: "@.+"
+- takeScreenshot: ${OUT}/charter-drawer
+
+# The first list below ALL_LISTS filters Home.
+- tapOn:
+    below: "ALL_LISTS"
+    text: ".+"
+    index: 0
+- extendedWaitUntil:
+    visible: "LIST: .+"
+    timeout: 5000
+- tapOn: "APPLY_FILTERS"
+- extendedWaitUntil:
+    notVisible: "STARGAZER_SYSTEM"
+    timeout: 5000
+- takeScreenshot: ${OUT}/charter-list-filter
+
+# The profile from the drawer header.
+- tapOn: "Open menu"
+- tapOn:
+    text: "@.+"
+    index: 0
+- extendedWaitUntil:
+    visible: "OPEN ON GITHUB"
+    timeout: 30000
+- takeScreenshot: ${OUT}/charter-profile
+- back
+
+# Leave Home unfiltered.
+- extendedWaitUntil:
+    visible: "Open menu"
+    timeout: 5000
+- tapOn: "Open menu"
+- tapOn: "\\[ CLEAR_ALL \\]"
+- tapOn: "APPLY_FILTERS"
+- extendedWaitUntil:
+    notVisible: "STARGAZER_SYSTEM"
+    timeout: 5000

@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import androidx.paging.filter
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,8 +16,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,7 +25,15 @@ import uk.adedamola.stargazer.data.local.database.SearchPreset
 import uk.adedamola.stargazer.data.local.database.Tag
 import uk.adedamola.stargazer.data.paging.SyncProgress
 import uk.adedamola.stargazer.data.remote.model.GitHubRepository
-import uk.adedamola.stargazer.data.auth.TokenManager
+import uk.adedamola.stargazer.data.auth.AccessSession
+import uk.adedamola.stargazer.data.auth.AccountSummary
+import uk.adedamola.stargazer.data.local.database.StarListEntity
+import uk.adedamola.stargazer.data.repository.Attempt
+import uk.adedamola.stargazer.data.repository.StarControlState
+import uk.adedamola.stargazer.data.repository.StarMessage
+import uk.adedamola.stargazer.data.repository.UndoOffer
+import uk.adedamola.stargazer.data.repository.RefreshStatus
+import uk.adedamola.stargazer.data.repository.StarListRepository
 import uk.adedamola.stargazer.data.repository.GitHubRepository as GitHubRepo
 import uk.adedamola.stargazer.data.repository.OrganizationRepository
 import uk.adedamola.stargazer.data.repository.SortOption
@@ -43,16 +53,22 @@ private data class FilterState(
     val maxStars: Int?,
     val favoritesOnly: Boolean,
     val pinnedOnly: Boolean,
-    val tagId: Int?
+    val tagId: Int?,
+    val listId: String?
 )
 
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val gitHubRepository: GitHubRepo,
     private val organizationRepository: OrganizationRepository,
-    private val tokenManager: TokenManager
+    private val accessSession: AccessSession,
+    private val starListRepository: StarListRepository,
+    searchFactory: HomeGitHubSearch.Factory,
+    removalsFactory: HomeRemovals.Factory,
+    starActionsFactory: HomeStarActions.Factory,
+    accountFactory: HomeAccount.Factory,
 ) : ViewModel() {
 
     companion object {
@@ -94,6 +110,19 @@ class HomeViewModel @Inject constructor(
     private val _selectedTagId = MutableStateFlow<Int?>(null)
     val selectedTagId: StateFlow<Int?> = _selectedTagId.asStateFlow()
 
+    private val _selectedListId = MutableStateFlow<String?>(null)
+    val selectedListId: StateFlow<String?> = _selectedListId.asStateFlow()
+
+    private val homeAccount = accountFactory.create(viewModelScope)
+
+    /** The account's GitHub star lists, as last cached (read-only). */
+    val starLists: StateFlow<List<StarListEntity>> = homeAccount.starLists
+
+    val listsStatus: StateFlow<RefreshStatus> = homeAccount.listsStatus
+
+    /** The signed-in account for the drawer header. */
+    val account: StateFlow<AccountSummary?> = homeAccount.account
+
     private val _minStars = MutableStateFlow<Int?>(null)
     val minStars: StateFlow<Int?> = _minStars.asStateFlow()
 
@@ -129,6 +158,10 @@ class HomeViewModel @Inject constructor(
      * Uses flatMapLatest to switch between different paging sources when filters change.
      * Uses debounced search query to avoid excessive database queries.
      */
+    private val search = searchFactory.create(_rawSearchQuery, viewModelScope)
+
+    private val starActions = starActionsFactory.create(viewModelScope, search)
+
     val repositories: Flow<PagingData<GitHubRepository>> = combine(
         _debouncedSearchQuery,
         _sortOption,
@@ -137,7 +170,8 @@ class HomeViewModel @Inject constructor(
         _maxStars,
         _showFavoritesOnly,
         _showPinnedOnly,
-        _selectedTagId
+        _selectedTagId,
+        _selectedListId
     ) { flows: Array<Any?> ->
         FilterState(
             query = flows[0] as String,
@@ -147,7 +181,8 @@ class HomeViewModel @Inject constructor(
             maxStars = flows[4] as Int?,
             favoritesOnly = flows[5] as Boolean,
             pinnedOnly = flows[6] as Boolean,
-            tagId = flows[7] as Int?
+            tagId = flows[7] as Int?,
+            listId = flows[8] as String?
         )
     }.flatMapLatest { filterState ->
         when {
@@ -159,6 +194,9 @@ class HomeViewModel @Inject constructor(
             }
             filterState.tagId != null -> {
                 organizationRepository.getRepositoriesWithTagPaging(filterState.tagId)
+            }
+            filterState.listId != null -> {
+                starListRepository.repositoriesInListPaging(filterState.listId)
             }
             filterState.query.isNotBlank() -> {
                 gitHubRepository.searchRepositoriesPaging(filterState.query)
@@ -176,12 +214,64 @@ class HomeViewModel @Inject constructor(
             }
         }
     }.cachedIn(viewModelScope)
+        // A repo whose unstar is pending leaves every list at once, but keeps its data until
+        // GitHub confirms and the Undo window ends.
+        .combine(starActions.hiddenIds) { data, hidden -> data.filter { it.id !in hidden } }
+
+    /** GitHub-wide search for the query, under the local matches. */
+    val gitHubSearchState: StateFlow<GitHubSearchState> = search.state
+
+    /** The star control of each GitHub result on screen. */
+    val searchControlStates: StateFlow<Map<Int, StarControlState>> = search.controlStates
+
+    /** The latest unstar's Undo offer. */
+    val undoOffer: StateFlow<UndoOffer?> = starActions.undoOffer
+
+    /** Results the person is told about: GitHub's answers and taps refused here. */
+    val starMessages: Flow<StarMessage> = starActions.messages
+
+    /** Unstars a Home row (the swipe or its accessibility action). Refused: the row stays. */
+    suspend fun unstarFromSwipe(repo: GitHubRepository): Attempt = starActions.unstarFromSwipe(repo)
+
+    /** Stars or unstars a GitHub search result. */
+    fun toggleSearchStar(repo: GitHubRepository) = starActions.toggleSearchStar(repo)
+
+    fun undo(repoId: Int) = starActions.undo(repoId)
+
+    /** Tries a failed star or unstar again. */
+    fun retry(message: StarMessage) = starActions.retry(message)
+
+    private val removals = removalsFactory.create(viewModelScope)
+
+    /** True while a pull-to-refresh reads GitHub's whole starred list. */
+    val reconciling: StateFlow<Boolean> = removals.reconciling
+
+    /** How many repos the first reconcile after a sign-in would remove; null when nothing waits. */
+    val removalNotice: StateFlow<Int?> = removals.notice
 
     fun refresh() {
         // Trigger refresh by clearing and reloading the paging data
         viewModelScope.launch {
             gitHubRepository.refreshStarredRepositories()
         }
+        refreshAccountData()
+        resumePendingUnstars()
+        // Pull-to-refresh only: app start and background sync never remove.
+        removals.reconcile()
+    }
+
+    /** Continue on the removal notice: the repos it counted leave, with their local data. */
+    fun confirmRemoval() = removals.confirm()
+
+    /** Settles unstars left open by a process that was killed during the Undo window. */
+    private fun resumePendingUnstars() = starActions.resumePending()
+
+    /** Refreshes the profile and the star lists on their own, so the starred list never waits. */
+    fun refreshAccountData() = homeAccount.refresh()
+
+    /** Filters Home to one GitHub star list; null shows every starred repo. */
+    fun filterByList(listId: String?) {
+        _selectedListId.value = listId
     }
 
     fun onSearchQueryChange(query: String) {
@@ -290,6 +380,28 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    init {
+        // This view model outlives a sign-out. When another account's data replaces the old one,
+        // a selected tag, preset or language of the old account must not filter the new list.
+        viewModelScope.launch {
+            homeAccount.accountChanges.collect {
+                removals.drop()
+                clearAllFilters()
+                refreshAccountData()
+            }
+        }
+        // A list that a refresh removed can no longer filter Home.
+        viewModelScope.launch {
+            homeAccount.starLists.collect { lists ->
+                val selected = _selectedListId.value
+                if (selected != null && lists.none { it.id == selected }) _selectedListId.value = null
+            }
+        }
+        // Home loads: bring the profile and the lists up to date.
+        refreshAccountData()
+        resumePendingUnstars()
+    }
+
     fun clearAllFilters() {
         _rawSearchQuery.value = ""
         savedStateHandle[SEARCH_QUERY_KEY] = ""
@@ -299,12 +411,13 @@ class HomeViewModel @Inject constructor(
         _showFavoritesOnly.value = false
         _showPinnedOnly.value = false
         _selectedTagId.value = null
+        _selectedListId.value = null
         _sortOption.value = SortOption.STARRED
     }
 
     fun logout() {
         viewModelScope.launch {
-            tokenManager.clearToken()
+            accessSession.signOut()
         }
     }
 

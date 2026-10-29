@@ -64,4 +64,7 @@ interface RepositoryTagDao {
 
     @Query("DELETE FROM repository_tags WHERE tagId = :tagId")
     suspend fun deleteAllRepositoriesForTag(tagId: Int)
+
+    @Query("DELETE FROM repository_tags")
+    suspend fun deleteAll()
 }

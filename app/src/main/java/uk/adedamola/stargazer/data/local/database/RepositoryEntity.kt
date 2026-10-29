@@ -73,6 +73,16 @@ interface RepositoryDao {
     @Query("SELECT * FROM repositories WHERE id = :id")
     suspend fun getRepositoryById(id: Int): RepositoryEntity?
 
+    @Query("SELECT * FROM repositories WHERE id = :id")
+    fun observeById(id: Int): Flow<RepositoryEntity?>
+
+    /** Deletes one repository; its tag assignments cascade, its favorite and pin go with the row. */
+    @Query("DELETE FROM repositories WHERE id = :id")
+    suspend fun deleteById(id: Int)
+
+    @Query("SELECT id FROM repositories")
+    suspend fun getAllIds(): List<Int>
+
     @Query("""
         SELECT * FROM repositories
         WHERE name LIKE '%' || :query || '%'
@@ -282,6 +292,16 @@ interface RepositoryDao {
 
     @Query("SELECT COUNT(*) FROM repositories")
     suspend fun getRepositoryCount(): Int
+
+    // "Starred here" means stored and with no unstar waiting; these two queries hold that rule.
+
+    /** Of [ids], the repositories starred here. */
+    @Query("SELECT id FROM repositories WHERE id IN (:ids) AND id NOT IN (SELECT repositoryId FROM pending_unstars)")
+    suspend fun getStarredIdsAmong(ids: List<Int>): List<Int>
+
+    /** How many repositories are starred here. */
+    @Query("SELECT COUNT(*) FROM repositories WHERE id NOT IN (SELECT repositoryId FROM pending_unstars)")
+    fun observeStarredCount(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM repositories WHERE starredAt IS NOT NULL")
     suspend fun getRepositoryCountWithStarredAt(): Int

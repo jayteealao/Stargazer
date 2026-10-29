@@ -1,0 +1,76 @@
+# The signed-in account in the drawer, the GitHub star lists as a Home filter, and the
+# profile screen offline: captures the drawer header, the lists, a selected list, the
+# filtered Home and the profile with its saved-copy line. The fixture has five lists, so the
+# lists section starts folded: the flow opens it, then folds it again after picking a list
+# to see the header name the selected list.
+#
+# Needs a signed-in fixture account with a cached profile and lists and no GitHub account:
+# run the instrumented seed first (ProfileFixtureSeed with -e profileFixture default), then
+# turn airplane mode on, so the refresh fails offline and the cached copy shows.
+#
+# Run: maestro --device <emulator-serial> test -e OUT=<dir> maestro/profile-and-lists.yaml
+appId: uk.adedamola.stargazer
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "STARGAZER"
+    timeout: 20000
+- assertVisible: "repo-01"
+
+- tapOn: "Open menu"
+- assertVisible: "Ada Okafor"
+- assertVisible: "@ada-builds"
+- takeScreenshot: ${OUT}/drawer-account-header
+- assertVisible: "STAR_LISTS"
+- assertNotVisible: "ALL_LISTS"
+- takeScreenshot: ${OUT}/drawer-star-lists-collapsed
+- tapOn: "STAR_LISTS"
+- assertVisible: "ANDROID LIBRARIES"
+- assertVisible: "RUST TOOLS"
+- takeScreenshot: ${OUT}/drawer-star-lists
+
+- tapOn: "RUST TOOLS"
+- assertVisible: "LIST: RUST TOOLS"
+- takeScreenshot: ${OUT}/drawer-list-selected
+- tapOn: "STAR_LISTS"
+- assertNotVisible: "ALL_LISTS"
+- assertVisible: "RUST TOOLS"
+- takeScreenshot: ${OUT}/drawer-list-selected-collapsed
+- tapOn: "APPLY_FILTERS"
+- extendedWaitUntil:
+    notVisible: "STARGAZER_SYSTEM"
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "repo-11"
+    timeout: 5000
+- assertNotVisible: "repo-01"
+- takeScreenshot: ${OUT}/home-filtered
+
+- tapOn: "Open menu"
+- tapOn: "\\[ CLEAR_ALL \\]"
+- tapOn: "APPLY_FILTERS"
+- extendedWaitUntil:
+    notVisible: "STARGAZER_SYSTEM"
+    timeout: 5000
+# Every starred repo is back: repo-15 is not on the Rust tools list. The list keeps its
+# scroll place, so look below it.
+- scrollUntilVisible:
+    element: "repo-15"
+    direction: DOWN
+    visibilityPercentage: 50
+    timeout: 15000
+- takeScreenshot: ${OUT}/home-cleared
+
+- tapOn: "Open menu"
+- tapOn: "@ada-builds"
+- extendedWaitUntil:
+    visible: "PROFILE"
+    timeout: 5000
+- assertVisible: "FOLLOWERS"
+- assertVisible: "OPEN ON GITHUB"
+- assertVisible: "OFFLINE — saved .*"
+- takeScreenshot: ${OUT}/profile-offline-cached
+- back
+- extendedWaitUntil:
+    visible: "STARGAZER"
+    timeout: 5000
