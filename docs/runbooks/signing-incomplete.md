@@ -1,5 +1,7 @@
 # Runbook: signing-incomplete
 
+> **Retired in ship plan v2.** Releases are unsigned by design. This runbook applies again only if the plan requires the signing secrets.
+
 ## When this fires
 
 CI logs matching any of the following patterns trigger this runbook:

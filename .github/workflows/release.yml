@@ -121,6 +121,10 @@ jobs:
 
           # Find APK (case-insensitive for release/Release)
           APK=$(find . -type f -path "*/build/outputs/apk/*elease/*.apk" ! -name "*-unsigned.apk" ! -name "*-unaligned.apk" | head -n1)
+          # Added by wf ship-plan build — plan v2, 2026-10-29: with no signing secrets, publish the unsigned APK
+          if [ -z "$APK" ]; then
+            APK=$(find . -type f -path "*/build/outputs/apk/*elease/*-unsigned.apk" | head -n1)
+          fi
           AAB=$(find . -type f -path "*/build/outputs/bundle/*elease/*.aab" | head -n1)
           MAP=$(find . -type f -path "*/build/outputs/mapping/*elease/mapping.txt" | head -n1 || true)
 
