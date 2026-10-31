@@ -98,7 +98,10 @@ android {
         getByName("release") {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            // With no keystore set, the release build stays unsigned (app-release-unsigned.apk).
+            if (signingValue("SIGNING_STORE_FILE") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         getByName("debug") {
             // CI only: a local signing.properties never signs a developer's debug build with the
