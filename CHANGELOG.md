@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-31
+
 ### Added
 - Sign in with GitHub by entering a short code on github.com; there is no token to create or paste
 - Your GitHub profile in the drawer header and on its own screen
