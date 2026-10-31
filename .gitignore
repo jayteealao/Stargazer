@@ -25,3 +25,9 @@ signing.properties
 
 # The records of the /wf workflows live in the records repo
 .ai/workflows/
+
+# sdlc-workflow artifacts: .ai/ stays local except the project contracts and the design record
+.ai/*
+!.ai/ship-plan.md
+!.ai/sdlc-config.json
+!.ai/design/
