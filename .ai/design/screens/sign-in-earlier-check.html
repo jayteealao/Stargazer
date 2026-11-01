@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="wf:screen" content="sign-in-earlier-check">
+<title>Sign-in: earlier sign-in not checked</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  :root {
+    --mono: ui-monospace, "Roboto Mono", "Droid Sans Mono", "Cascadia Mono", monospace;
+    --scale: 1;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--text); font-family: var(--mono); }
+  body [data-state] { display: none; }
+  html[data-state="default"] [data-state~="default"], html[data-state="empty"] [data-state~="empty"],
+  html[data-state="loading"] [data-state~="loading"], html[data-state="error"] [data-state~="error"],
+  html[data-state="worst"] [data-state~="worst"] { display: flex; }
+  html[data-state="worst"] { --scale: 2; }
+
+  /* The sign-in column: 22 dp side padding, at most 600 dp wide, 30/70 split of the free height. */
+  .screen {
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 24px 22px 20px;
+  }
+  .top { flex: 3 0 0; min-height: 24px; }
+  .bottom { flex: 7 0 0; min-height: 24px; }
+
+  .prompt { display: flex; align-items: center; gap: 4px; font-size: calc(14px * var(--scale)); color: var(--text); margin: 0; font-weight: 400; }
+  .prompt .sigil { color: var(--accent); }
+  .cursor { display: inline-block; width: 9px; height: 17px; background: var(--accent); }
+  .cursor.live { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cursor.live { animation: none; } }
+  .gap-20 { height: 20px; }
+  .gap-12 { height: 12px; }
+  .gap-10 { height: 10px; }
+  .gap-4 { height: 4px; }
+
+  .status { display: flex; gap: 10px; align-items: flex-start; }
+  .status svg { flex: none; width: calc(18px * var(--scale)); height: calc(18px * var(--scale)); margin-top: 2px; }
+  .status p, .detail, .hint { margin: 0; overflow-wrap: anywhere; }
+  .status p { font-size: calc(14px * var(--scale)); line-height: 1.5; color: var(--warning); }
+  .detail { font-size: calc(12px * var(--scale)); line-height: 1.5; color: var(--text-secondary); }
+  .hint { font-size: calc(14px * var(--scale)); line-height: 1.5; color: var(--text); font-variant-numeric: tabular-nums; }
+  .login { color: var(--text); }
+
+  .text-action {
+    display: inline-flex; align-items: center; min-height: 48px; padding: 0 12px; margin-left: -12px;
+    font: inherit; font-size: calc(14px * var(--scale)); color: var(--link); text-decoration: none;
+    background: none; border: 0; border-radius: 20px; cursor: pointer;
+  }
+  .text-action:hover { background: color-mix(in srgb, var(--link) 8%, transparent); }
+  .text-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .code { font-size: 48px; font-weight: 500; letter-spacing: 6px; color: var(--text); white-space: nowrap; margin: 0; }
+  .code .hyphen { color: var(--text-secondary); }
+
+  /* StargazerButton: orange, chamfered top-start and bottom-end by 8 dp, 1 dp white border at 20%. */
+  .button {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    min-height: 52px; padding: 16px 24px;
+    font: inherit; font-size: calc(14px * var(--scale)); line-height: 1.43; letter-spacing: 0.1px;
+    text-transform: uppercase; text-decoration: none; text-align: center;
+    color: var(--text); background: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    cursor: pointer;
+  }
+  .button:hover { background: color-mix(in srgb, var(--accent) 92%, var(--text)); }
+  .button:active { background: color-mix(in srgb, var(--accent) 84%, var(--text)); }
+  .button:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  /* As built today: Material Color.Gray container and Color.LightGray label (design debt, not new). */
+  .button[aria-disabled="true"] { background: #888888; color: #CCCCCC; cursor: default; }
+  .gap-btn { height: 20px; }
+</style>
+<script>
+  // The canvas and the checks open a state with ?state=<name>.
+  document.documentElement.dataset.state = new URLSearchParams(location.search).get('state') || 'default';
+</script>
+</head>
+<body>
+<main>
+
+  <!-- default: the check of the earlier sign-in failed; the approval is kept. -->
+  <section class="screen" data-state="default" aria-label="Earlier sign-in not checked">
+    <div class="top"></div>
+    <h1 class="prompt" aria-label="link github"><span><span class="sigil">$</span> link github</span></h1>
+    <div class="gap-20"></div>
+    <div role="status" aria-live="assertive">
+      <div class="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--warning)" d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.5 2 12a10 10 0 1 0 10-10zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>
+        <p>CHECK_PENDING — GitHub approved <span class="login">@octocat</span>, but Stargazer could not check your earlier sign-in.</p>
+      </div>
+      <div class="gap-10"></div>
+      <p class="detail">Your approval is kept. Try again when github.com can be reached.</p>
+    </div>
+    <div class="gap-4"></div>
+    <a class="text-action" href="#" aria-label="New code">[ NEW_CODE ]</a>
+    <div class="bottom"></div>
+    <a class="button" href="?state=loading">Try again</a>
+    <div class="gap-btn"></div>
+  </section>
+
+  <!-- empty: the entry state before the check, the existing Completing phase. -->
+  <section class="screen" data-state="empty" aria-label="Signing you in">
+    <div class="top"></div>
+    <h1 class="prompt" aria-label="link github"><span><span class="sigil">$</span> link github</span><span class="cursor live" aria-hidden="true"></span></h1>
+    <div class="gap-20"></div>
+    <p class="code" aria-label="code W D J B - M J H T">WDJB<span class="hyphen">-</span>MJHT</p>
+    <div class="gap-12"></div>
+    <p class="hint">signing you in…</p>
+    <div class="bottom"></div>
+    <a class="button" href="?state=default">Copy code &amp; open GitHub</a>
+    <div class="gap-btn"></div>
+  </section>
+
+  <!-- loading: "Try again" runs the check again with the kept approval; no new code. -->
+  <section class="screen" data-state="loading" aria-label="Checking your earlier sign-in">
+    <div class="top"></div>
+    <h1 class="prompt" aria-label="link github"><span><span class="sigil">$</span> link github</span><span class="cursor live" aria-hidden="true"></span></h1>
+    <div class="gap-20"></div>
+    <p class="hint" role="status" aria-live="polite">checking your earlier sign-in…</p>
+    <div class="gap-10"></div>
+    <p class="detail">approved as <span class="login">@octocat</span></p>
+    <div class="bottom"></div>
+    <a class="button" href="?state=error" aria-disabled="true">Try again</a>
+    <div class="gap-btn"></div>
+  </section>
+
+  <!-- error: the check failed again. -->
+  <section class="screen" data-state="error" aria-label="Earlier sign-in still not checked">
+    <div class="top"></div>
+    <h1 class="prompt" aria-label="link github"><span><span class="sigil">$</span> link github</span></h1>
+    <div class="gap-20"></div>
+    <div role="status" aria-live="assertive">
+      <div class="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--warning)" d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.5 2 12a10 10 0 1 0 10-10zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>
+        <p>CHECK_PENDING — GitHub approved <span class="login">@octocat</span>, but Stargazer could not check your earlier sign-in.</p>
+      </div>
+      <div class="gap-10"></div>
+      <p class="detail">Still not checked. Wait a minute and try again, or get a new code.</p>
+    </div>
+    <div class="gap-4"></div>
+    <a class="text-action" href="?state=empty" aria-label="New code">[ NEW_CODE ]</a>
+    <div class="bottom"></div>
+    <a class="button" href="?state=loading">Try again</a>
+    <div class="gap-btn"></div>
+  </section>
+
+  <!-- worst: a 39-character GitHub login at the largest system text size (200%). -->
+  <section class="screen" data-state="worst" aria-label="Earlier sign-in not checked, worst case">
+    <div class="top"></div>
+    <h1 class="prompt" aria-label="link github"><span><span class="sigil">$</span> link github</span></h1>
+    <div class="gap-20"></div>
+    <div role="status" aria-live="assertive">
+      <div class="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--warning)" d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.5 2 12a10 10 0 1 0 10-10zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>
+        <p>CHECK_PENDING — GitHub approved <span class="login">@aleksandra-wisniewska-kowalczyk-devtool</span>, but Stargazer could not check your earlier sign-in.</p>
+      </div>
+      <div class="gap-10"></div>
+      <p class="detail">Still not checked. Wait a minute and try again, or get a new code.</p>
+    </div>
+    <div class="gap-4"></div>
+    <a class="text-action" href="#" aria-label="New code">[ NEW_CODE ]</a>
+    <div class="bottom"></div>
+    <a class="button" href="?state=loading">Try again</a>
+    <div class="gap-btn"></div>
+  </section>
+
+</main>
+</body>
+</html>
