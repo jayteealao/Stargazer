@@ -1,0 +1,29 @@
+{
+  "schema": "sdlc/design-screens/v1",
+  "viewports": {
+    "phone": "375x812",
+    "tablet": "768x1024",
+    "desktop": "1280x800"
+  },
+  "areas": [
+    "home",
+    "profile",
+    "shared"
+  ],
+  "screens": {
+    "sign-in-earlier-check": {
+      "title": "Sign-in: earlier sign-in not checked",
+      "area": "shared",
+      "flow": "sign-in",
+      "order": 30,
+      "workflows": [
+        "fix-sign-in-upgrade-and-decrypt"
+      ],
+      "slices": [],
+      "created-at": "2026-11-01T21:58:15Z",
+      "updated-at": "2026-11-01T21:58:15Z",
+      "approvals": []
+    }
+  },
+  "explore": {}
+}

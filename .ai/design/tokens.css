@@ -1,0 +1,32 @@
+/* From DESIGN.md, ## Colors. wf.mjs design tokens writes this file; do not edit it. */
+:root {
+  --name: Used for;
+  --factoryorange: Primary actions, focused field borders;
+  --factorycyan: Secondary accent, links, data highlights;
+  --factoryyellow: Warnings (tertiary);
+  --factorydarkgrey: Background, splash background, status bar;
+  --factorysurfacegrey: Surfaces, cards, drawer;
+  --factorytextwhite: Primary text;
+  --factorytextgrey: Secondary text;
+  --factoryborder: Dividers and outlines;
+  --primarycontainer: Orange-tinted containers;
+  --secondarycontainer: Cyan-tinted containers;
+  --ground: #1A1A1A;
+  --surface: #2D2D2D;
+  --text: #F0F0F0;
+  --text-secondary: #AAAAAA;
+  --accent: #FF6600;
+  --border: #444444;
+  --focus: #00CCFF;
+  --link: #00CCFF;
+  --error: #F2B8B5;
+  --warning: #FFCC00;
+  --warning-container: #3A2A00;
+  --rest-outline: white at 30%;
+  --disabled-text: #666666;
+  --disabled-border: #333333;
+  --muted-text: white at 60%;
+  --skeleton: white at 10%, 6%;
+  --avatar-tint: #FFB380, #80E5FF, #FFE680;
+  --avatar-no-name: #CCCCCC;
+}
