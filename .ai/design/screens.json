@@ -19,9 +19,11 @@
       "workflows": [
         "fix-sign-in-upgrade-and-decrypt"
       ],
-      "slices": [],
+      "slices": [
+        "fix-sign-in-upgrade-and-decrypt"
+      ],
       "created-at": "2026-11-01T21:58:15Z",
-      "updated-at": "2026-11-01T21:58:15Z",
+      "updated-at": "2026-11-01T22:24:02Z",
       "approvals": [
         {
           "commit": "0053dba1da2f5ff23a9c6dde56de990c11aa6451",
