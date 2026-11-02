@@ -5,7 +5,6 @@ import uk.adedamola.stargazer.data.local.database.AccountDao
 import uk.adedamola.stargazer.data.local.database.AccountRecord
 import uk.adedamola.stargazer.data.remote.api.GitHubApiService
 import uk.adedamola.stargazer.data.remote.model.GitHubUser
-import java.io.IOException
 import javax.inject.Inject
 
 /**
@@ -34,6 +33,13 @@ sealed interface SignInOutcome {
         val counts: LocalDataCounts,
         val pending: PendingSignIn
     ) : SignInOutcome
+
+    /**
+     * GitHub approved [pending], but the earlier version's token could not be checked (offline,
+     * a rate limit, a GitHub error). Nothing is stored; [SignInCompleter.recheck] tries again with
+     * the same approval, so the person never approves a second code.
+     */
+    data class CheckPending(val pending: PendingSignIn) : SignInOutcome
 }
 
 /**
@@ -46,6 +52,8 @@ sealed interface SignInOutcome {
  * - A different user id: [SignInOutcome.AccountChange]; nothing is stored until the person answers.
  * - The data owner is unknown (a dead token from the earlier version, or local data with no recorded
  *   account): [SignInOutcome.KeepData].
+ * - The earlier version's token cannot be checked yet: [SignInOutcome.CheckPending]; nothing is
+ *   stored, and [recheck] tries again with the same approval.
  *
  * Cancel needs no call here: the pending key was never stored, so the caller drops the
  * [PendingSignIn] and every table and the recorded account stay as they were.
@@ -75,19 +83,27 @@ class SignInCompleter(
         api, accountDao, tokenManager, wipe, legacyIdentifier, legacyStore, localData, System::currentTimeMillis
     )
 
-    /** The failure is IOException (offline, or the earlier version's token could not be checked) or HttpException. */
+    /** The failure is IOException (offline) or HttpException. */
     suspend fun complete(key: String): Result<SignInOutcome> = runSafely {
         val user = api.getAuthenticatedUser("Bearer $key")
-        if (legacyIdentifier.identify() == LegacyIdentify.Unresolved) {
-            throw IOException("The earlier sign-in could not be checked")
-        }
-        val pending = PendingSignIn(key, user)
+        decide(PendingSignIn(key, user))
+    }
+
+    /**
+     * Checks the earlier version's token again for an approval that [complete] returned as
+     * [SignInOutcome.CheckPending], and goes on as [complete] would. No new code is requested.
+     */
+    suspend fun recheck(pending: PendingSignIn): Result<SignInOutcome> = runSafely { decide(pending) }
+
+    private suspend fun decide(pending: PendingSignIn): SignInOutcome {
+        if (legacyIdentifier.identify() == LegacyIdentify.Unresolved) return SignInOutcome.CheckPending(pending)
+        val user = pending.user
         val recorded = accountDao.get()
         // No record but data on the phone: an earlier version that was signed out before the
         // update left it, and nobody knows whose it is.
         val counts = localData.counts()
         val unknownOwner = legacyStore.ownerUnknown() || (recorded == null && counts.isNotEmpty())
-        when {
+        return when {
             unknownOwner -> SignInOutcome.KeepData(
                 new = user.summary(),
                 counts = counts,
@@ -96,7 +112,7 @@ class SignInCompleter(
             recorded == null || recorded.userId == user.id -> {
                 // Same account: refresh a renamed login or a new avatar, keep every table.
                 accountDao.replace(user.record())
-                tokenManager.saveToken(key)
+                tokenManager.saveToken(pending.key)
                 SignInOutcome.Done
             }
             else -> {
