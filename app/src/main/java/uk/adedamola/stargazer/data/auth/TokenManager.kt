@@ -31,6 +31,9 @@ sealed interface KeyState {
     /**
      * The stored key could not be read just now and is kept. [final] is true once the bounded
      * re-reads failed too; the next store change reads it again.
+     *
+     * A caller keeps the state it last knew. Only a final read with no state known yet (the
+     * first read at launch) counts as signed out.
      */
     data class Unavailable(val final: Boolean) : KeyState
 }
@@ -94,11 +97,12 @@ class TokenManager(
     val keyState: Flow<KeyState> = reads
         .transformLatest { first ->
             var read = first
-            for (attempt in 1..KEY_REREADS) {
-                if (read != KeyRead.Unavailable) break
+            var rereads = 0
+            while (read == KeyRead.Unavailable && rereads < KEY_REREADS) {
                 emit(KeyState.Unavailable(final = false))
                 delay(rereadDelay)
                 read = reads.first()
+                rereads++
             }
             emit(
                 when (read) {
