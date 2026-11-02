@@ -1,6 +1,7 @@
 package uk.adedamola.stargazer.data.auth
 
 import android.security.keystore.KeyPermanentlyInvalidatedException
+import android.os.SystemClock
 import android.util.Base64
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -13,7 +14,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -31,6 +34,7 @@ import java.security.KeyStoreException
 import java.security.ProviderException
 import java.security.UnrecoverableKeyException
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -201,6 +205,53 @@ class TokenManagerEnvelopeTest {
                 assertEquals("$name: token after recovery", fakeKey, manager.token.first())
             }
         }
+    }
+
+    @Test
+    fun anUnavailableReadIsRetriedAndThenReadsPresent() = withManagerScope { caseScope ->
+        TokenManager(dataStore, AndroidKeystoreCipher(alias), caseScope).saveToken(fakeKey)
+        val cipher = FailingCipher(AndroidKeystoreCipher(alias)).apply { decryptFailure = KeyStoreException("busy") }
+        val manager = TokenManager(dataStore, cipher, caseScope)
+        val states = CopyOnWriteArrayList<KeyState>()
+        val watcher = caseScope.launch { manager.keyState.collect { states += it } }
+
+        eventually("a first unavailable read") { states.isNotEmpty() }
+        assertEquals(KeyState.Unavailable(final = false), states.first())
+        cipher.decryptFailure = null
+
+        eventually("a later read finds the key", timeoutMillis = 5_000) { states.lastOrNull() == KeyState.Present }
+        assertEquals(listOf(KeyState.Unavailable(final = false), KeyState.Present), states.toList())
+        assertEquals("the key was kept", 0, cipher.deleteKeyCalls.get())
+        watcher.cancel()
+    }
+
+    @Test
+    fun threeUnavailableReadsEndInAFinalUnavailable() = withManagerScope { caseScope ->
+        TokenManager(dataStore, AndroidKeystoreCipher(alias), caseScope).saveToken(fakeKey)
+        val saved = storedCiphertext()!!
+        val cipher = FailingCipher(AndroidKeystoreCipher(alias)).apply { decryptFailure = ProviderException("busy") }
+        val manager = TokenManager(dataStore, cipher, caseScope)
+        val started = SystemClock.elapsedRealtime()
+
+        val final = withTimeout(10_000) { manager.keyState.first { it == KeyState.Unavailable(final = true) } }
+
+        val waited = SystemClock.elapsedRealtime() - started
+        assertEquals(KeyState.Unavailable(final = true), final)
+        assertTrue("three re-reads, one second apart (waited $waited ms)", waited in 2_900..6_000)
+        assertArrayEquals("ciphertext kept", saved, storedCiphertext())
+        assertEquals(0, cipher.deleteKeyCalls.get())
+    }
+
+    @Test
+    fun keyStateReadsPresentAndAbsentWithoutRetry() = runBlocking {
+        val manager = manager()
+        assertEquals(KeyState.Absent, manager.keyState.first())
+
+        manager.saveToken(fakeKey)
+        assertEquals(KeyState.Present, manager.keyState.first())
+
+        manager.clearToken()
+        assertEquals(KeyState.Absent, manager.keyState.first())
     }
 
     @Test

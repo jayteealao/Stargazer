@@ -8,15 +8,32 @@ import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+
+/** Whether a key is stored, as the screens see it; the key itself never leaves [TokenManager] here. */
+sealed interface KeyState {
+    data object Present : KeyState
+    /** No key is stored, or the stored key could never be read and was deleted. */
+    data object Absent : KeyState
+    /**
+     * The stored key could not be read just now and is kept. [final] is true once the bounded
+     * re-reads failed too; the next store change reads it again.
+     */
+    data class Unavailable(val final: Boolean) : KeyState
+}
 
 /** Synchronous read of the current access key, for the HTTP layer. */
 interface AccessKeyProvider {
@@ -37,6 +54,7 @@ class TokenManager(
     private val dataStore: DataStore<Preferences>,
     private val cipher: AccessKeyCipher,
     scope: CoroutineScope,
+    private val rereadDelay: Duration = 1.seconds,
 ) : AccessKeyProvider {
 
     private val ciphertextKey = byteArrayPreferencesKey("ciphertext")
@@ -67,6 +85,30 @@ class TokenManager(
         .map { (it as? KeyRead.Present)?.key }
         .distinctUntilChanged()
         .flowOn(Dispatchers.IO)
+
+    /**
+     * [KeyState] of the stored key. An unavailable read is read again, at most [KEY_REREADS] times,
+     * [rereadDelay] apart, so a short Keystore failure never reads as signed out.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val keyState: Flow<KeyState> = reads
+        .transformLatest { first ->
+            var read = first
+            for (attempt in 1..KEY_REREADS) {
+                if (read != KeyRead.Unavailable) break
+                emit(KeyState.Unavailable(final = false))
+                delay(rereadDelay)
+                read = reads.first()
+            }
+            emit(
+                when (read) {
+                    is KeyRead.Present -> KeyState.Present
+                    KeyRead.Absent -> KeyState.Absent
+                    KeyRead.Unavailable -> KeyState.Unavailable(final = true)
+                }
+            )
+        }
+        .distinctUntilChanged()
 
     init {
         // Re-read the store under the write lock instead of trusting the emitted value,
@@ -159,5 +201,6 @@ class TokenManager(
 
     private companion object {
         const val TAG = "TokenManager"
+        const val KEY_REREADS = 3
     }
 }
