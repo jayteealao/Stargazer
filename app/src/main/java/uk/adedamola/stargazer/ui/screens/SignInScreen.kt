@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -40,6 +41,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -369,13 +372,18 @@ private fun checkPendingStatus(login: String): AnnotatedString = buildAnnotatedS
     append(", but Stargazer could not check your earlier sign-in.")
 }
 
-/** `[ NEW_CODE ]`: start over with a new code. */
+/**
+ * `[ NEW_CODE ]`: start over with a new code. Pulled left by the button's own side padding, so
+ * its label lines up with the text above it; the 48 dp target stays.
+ */
 @Composable
 private fun NewCodeButton(onClick: () -> Unit, enabled: Boolean) {
     TextButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.minimumInteractiveComponentSize()
+        modifier = Modifier
+            .offset(x = -ButtonDefaults.TextButtonContentPadding.calculateLeftPadding(LayoutDirection.Ltr))
+            .minimumInteractiveComponentSize()
     ) {
         Text(
             text = "[ NEW_CODE ]",

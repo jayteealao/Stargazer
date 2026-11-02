@@ -221,6 +221,11 @@ class SignInScreenStatesTest {
             "TRY AGAIN"
         )
         assertInsideSafeArea("TRY AGAIN", hasCode = false)
+        // The text action lines up with the detail line above it, as on the board.
+        val actionLeft = composeRule.onNodeWithText("[ NEW_CODE ]", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.left
+        val detailLeft = composeRule.onNodeWithText("Your approval is kept. Try again when github.com can be reached.", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot.left
+        assertEquals("[ NEW_CODE ] left edge", detailLeft, actionLeft, composeRule.density.density)
         composeRule.onNodeWithText("TRY AGAIN").performClick()
         assertEquals("Try again rechecks; it never asks for a new code", 1 to 0, retried to newCodes)
         composeRule.onNodeWithText("[ NEW_CODE ]").performClick()
