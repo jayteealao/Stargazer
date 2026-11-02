@@ -109,6 +109,7 @@ fun SignInRoute(
             if (!openBrowser(context, safeVerificationUri(state.verificationUri))) viewModel.onBrowserMissing()
         },
         onCopyCode = { state.userCode?.let { copyCode(context, it) } },
+        onRetryCheck = viewModel::retryCheck,
         cursorBlinks = cursorBlinks
     )
     when (val decision = state.decision) {
@@ -137,6 +138,7 @@ fun SignInScreen(
     onSignIn: () -> Unit,
     onCopyAndOpen: () -> Unit,
     onCopyCode: () -> Unit,
+    onRetryCheck: () -> Unit,
     modifier: Modifier = Modifier,
     cursorBlinks: Boolean = true
 ) {
@@ -184,18 +186,7 @@ fun SignInScreen(
                     if (phase == SignInPhase.Waiting) {
                         Spacer(modifier = Modifier.height(4.dp))
                         // Start over without waiting for the code to run out.
-                        TextButton(
-                            onClick = onSignIn,
-                            enabled = state.actionEnabled,
-                            modifier = Modifier.minimumInteractiveComponentSize()
-                        ) {
-                            Text(
-                                text = "[ NEW_CODE ]",
-                                fontFamily = FontFamily.Monospace,
-                                color = FactoryCyan,
-                                modifier = Modifier.semantics { contentDescription = "New code" }
-                            )
-                        }
+                        NewCodeButton(onClick = onSignIn, enabled = state.actionEnabled)
                     }
                 }
                 SignInPhase.Expired -> {
@@ -225,7 +216,21 @@ fun SignInScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     HintLine("and enter the code above.")
                 }
-                is SignInPhase.CheckPending, is SignInPhase.Rechecking -> Unit
+                is SignInPhase.CheckPending -> {
+                    ErrorLines(
+                        checkPendingStatus(phase.login),
+                        if (phase.repeated) "Still not checked. Wait a minute and try again, or get a new code."
+                        else "Your approval is kept. Try again when github.com can be reached."
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // The way out: drops the kept approval and starts a new code.
+                    NewCodeButton(onClick = onSignIn, enabled = state.actionEnabled)
+                }
+                is SignInPhase.Rechecking -> {
+                    HintLine("checking your earlier sign-in…", large = true)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    HintLine("approved as @${phase.login}")
+                }
             }
 
             Spacer(modifier = Modifier.weight(0.7f))
@@ -237,7 +242,8 @@ fun SignInScreen(
                 SignInPhase.Expired -> "Get a new code" to onSignIn
                 SignInPhase.Offline, is SignInPhase.GitHubError -> "Try again" to onSignIn
                 SignInPhase.NoBrowser -> "Copy code" to onCopyCode
-                is SignInPhase.CheckPending, is SignInPhase.Rechecking -> "Try again" to onSignIn
+                // Checks again with the kept approval; never a new code.
+                is SignInPhase.CheckPending, is SignInPhase.Rechecking -> "Try again" to onRetryCheck
             }
             StargazerButton(text = label, onClick = action, enabled = state.actionEnabled)
             Spacer(modifier = Modifier.height(20.dp))
@@ -248,7 +254,8 @@ fun SignInScreen(
 private enum class Cursor { Live, Resting, None }
 
 private fun cursorFor(phase: SignInPhase): Cursor = when (phase) {
-    SignInPhase.Requesting, SignInPhase.Waiting, SignInPhase.Completing, SignInPhase.NoBrowser -> Cursor.Live
+    SignInPhase.Requesting, SignInPhase.Waiting, SignInPhase.Completing, SignInPhase.NoBrowser,
+    is SignInPhase.Rechecking -> Cursor.Live
     SignInPhase.Idle -> Cursor.Resting
     else -> Cursor.None
 }
@@ -352,8 +359,36 @@ internal fun gitHubErrorText(label: String): String {
     }
 }
 
+/** The CHECK_PENDING line, with the approving login in white so the person sees the approval worked. */
+private fun checkPendingStatus(login: String): AnnotatedString = buildAnnotatedString {
+    append("CHECK_PENDING — GitHub approved ")
+    withStyle(SpanStyle(color = FactoryTextWhite)) { append("@$login") }
+    append(", but Stargazer could not check your earlier sign-in.")
+}
+
+/** `[ NEW_CODE ]`: start over with a new code. */
 @Composable
-private fun StatusText(text: String, color: Color, announce: Boolean = false) {
+private fun NewCodeButton(onClick: () -> Unit, enabled: Boolean) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.minimumInteractiveComponentSize()
+    ) {
+        Text(
+            text = "[ NEW_CODE ]",
+            fontFamily = FontFamily.Monospace,
+            color = FactoryCyan,
+            modifier = Modifier.semantics { contentDescription = "New code" }
+        )
+    }
+}
+
+@Composable
+private fun StatusText(text: String, color: Color, announce: Boolean = false) =
+    StatusText(AnnotatedString(text), color, announce)
+
+@Composable
+private fun StatusText(text: AnnotatedString, color: Color, announce: Boolean = false) {
     Text(
         text = text,
         fontFamily = FontFamily.Monospace,
@@ -406,7 +441,10 @@ private fun RequestingBody() {
 
 /** A yellow SCREAMING_SNAKE status with its icon, then plain words in grey. */
 @Composable
-private fun ErrorLines(status: String, detail: String?) {
+private fun ErrorLines(status: String, detail: String?) = ErrorLines(AnnotatedString(status), detail)
+
+@Composable
+private fun ErrorLines(status: AnnotatedString, detail: String?) {
     // One node, read out as soon as it appears: focus stays on the button below.
     Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Assertive }) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

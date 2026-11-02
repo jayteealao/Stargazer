@@ -66,7 +66,7 @@ class AccountDialogsTest {
             StargazerTheme {
                 SignInScreen(
                     state = SignInUiState(phase = SignInPhase.Completing, userCode = "WDJB-MJHT", secondsLeft = 872),
-                    onSignIn = {}, onCopyAndOpen = {}, onCopyCode = {}, cursorBlinks = false
+                    onSignIn = {}, onCopyAndOpen = {}, onCopyCode = {}, onRetryCheck = {}, cursorBlinks = false
                 )
                 dialog()
             }
