@@ -7,13 +7,21 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -34,7 +42,10 @@ class SignInScreenStatesTest {
 
     private val code = "WDJB-MJHT"
 
-    private fun render(state: SignInUiState) {
+    private var retried = 0
+    private var newCodes = 0
+
+    private fun render(state: SignInUiState, fontScale: Float? = null) {
         composeRule.runOnUiThread {
             composeRule.activity.enableEdgeToEdge(
                 statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -42,8 +53,18 @@ class SignInScreenStatesTest {
             )
         }
         composeRule.setContent {
-            StargazerTheme {
-                SignInScreen(state = state, onSignIn = {}, onCopyAndOpen = {}, onCopyCode = {}, cursorBlinks = false)
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
+                StargazerTheme {
+                    SignInScreen(
+                        state = state,
+                        onSignIn = { newCodes++ },
+                        onCopyAndOpen = {},
+                        onCopyCode = {},
+                        onRetryCheck = { retried++ },
+                        cursorBlinks = false
+                    )
+                }
             }
         }
         composeRule.waitForIdle()
@@ -184,6 +205,62 @@ class SignInScreenStatesTest {
         )
         assertInsideSafeArea("COPY CODE", hasCode = true)
         capture("sign-in--no-browser")
+    }
+
+    @Test
+    fun checkPending() {
+        render(SignInUiState(phase = SignInPhase.CheckPending(login = "fixture-login", repeated = false)))
+        assertShown(
+            "CHECK_PENDING — GitHub approved @fixture-login, but Stargazer could not check your earlier sign-in.",
+            "Your approval is kept. Try again when github.com can be reached.",
+            "[ NEW_CODE ]",
+            "TRY AGAIN"
+        )
+        assertInsideSafeArea("TRY AGAIN", hasCode = false)
+        composeRule.onNodeWithText("TRY AGAIN").performClick()
+        assertEquals("Try again rechecks; it never asks for a new code", 1 to 0, retried to newCodes)
+        composeRule.onNodeWithText("[ NEW_CODE ]").performClick()
+        assertEquals(1 to 1, retried to newCodes)
+        capture("sign-in-earlier-check--default")
+    }
+
+    @Test
+    fun checkPendingRepeated() {
+        render(SignInUiState(phase = SignInPhase.CheckPending(login = "fixture-login", repeated = true)))
+        assertShown(
+            "CHECK_PENDING — GitHub approved @fixture-login, but Stargazer could not check your earlier sign-in.",
+            "Still not checked. Wait a minute and try again, or get a new code.",
+            "[ NEW_CODE ]",
+            "TRY AGAIN"
+        )
+        assertInsideSafeArea("TRY AGAIN", hasCode = false)
+        capture("sign-in-earlier-check--error")
+    }
+
+    @Test
+    fun rechecking() {
+        render(SignInUiState(phase = SignInPhase.Rechecking(login = "fixture-login")))
+        assertShown("checking your earlier sign-in…", "approved as @fixture-login", "TRY AGAIN")
+        composeRule.onNodeWithText("TRY AGAIN").assertIsNotEnabled()
+        assertTrue(
+            "no new code while checking",
+            composeRule.onAllNodes(hasText("[ NEW_CODE ]")).fetchSemanticsNodes().isEmpty()
+        )
+        capture("sign-in-earlier-check--loading")
+    }
+
+    @Test
+    fun checkPendingWorstCase() {
+        // The longest login GitHub allows, at twice the text size.
+        val login = "a".repeat(19) + "-" + "b".repeat(19)
+        render(SignInUiState(phase = SignInPhase.CheckPending(login = login, repeated = true)), fontScale = 2f)
+        assertShown(
+            "CHECK_PENDING — GitHub approved @$login, but Stargazer could not check your earlier sign-in.",
+            "Still not checked. Wait a minute and try again, or get a new code."
+        )
+        composeRule.onNodeWithText("TRY AGAIN").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("[ NEW_CODE ]").performScrollTo().assertIsDisplayed()
+        capture("sign-in-earlier-check--worst")
     }
 
     @Test
