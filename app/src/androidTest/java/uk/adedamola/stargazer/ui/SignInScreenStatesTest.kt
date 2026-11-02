@@ -6,7 +6,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
@@ -242,6 +246,9 @@ class SignInScreenStatesTest {
         render(SignInUiState(phase = SignInPhase.Rechecking(login = "fixture-login")))
         assertShown("checking your earlier sign-in…", "approved as @fixture-login", "TRY AGAIN")
         composeRule.onNodeWithText("TRY AGAIN").assertIsNotEnabled()
+        // Announced politely when the check starts.
+        composeRule.onNodeWithText("checking your earlier sign-in…")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         assertTrue(
             "no new code while checking",
             composeRule.onAllNodes(hasText("[ NEW_CODE ]")).fetchSemanticsNodes().isEmpty()
