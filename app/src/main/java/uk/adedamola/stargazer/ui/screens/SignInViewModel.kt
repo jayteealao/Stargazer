@@ -129,7 +129,7 @@ class SignInViewModel @Inject constructor(
             is DeviceFlowStep.Approved -> {
                 tickJob?.cancel()
                 local.update { it.copy(phase = SignInPhase.Completing) }
-                onOutcome(completer.complete(step.key), retried = false)
+                onOutcome(completer.complete(step.key), held = null)
             }
             DeviceFlowStep.Expired -> end(SignInPhase.Expired)
             DeviceFlowStep.Denied -> end(SignInPhase.Denied)
@@ -146,11 +146,20 @@ class SignInViewModel @Inject constructor(
         val held = pending ?: return
         if (local.value.phase !is SignInPhase.CheckPending) return
         local.update { it.copy(phase = SignInPhase.Rechecking(held.user.login)) }
-        checkJob = viewModelScope.launch { onOutcome(completer.recheck(held), retried = true) }
+        checkJob = viewModelScope.launch { onOutcome(completer.recheck(held), held = held) }
     }
 
-    private fun onOutcome(result: Result<SignInOutcome>, retried: Boolean) {
+    /**
+     * [held] is the kept approval when this is a retried check. A retried check that fails keeps
+     * it and stays on CheckPending, so Try again never turns into a new code.
+     */
+    private fun onOutcome(result: Result<SignInOutcome>, held: PendingSignIn?) {
         val outcome = result.getOrNull()
+        if (outcome == null && held != null) {
+            pending = held
+            local.update { it.copy(phase = SignInPhase.CheckPending(held.user.login, repeated = true)) }
+            return
+        }
         pending = when (outcome) {
             is SignInOutcome.AccountChange -> outcome.pending
             is SignInOutcome.KeepData -> outcome.pending
@@ -165,7 +174,7 @@ class SignInViewModel @Inject constructor(
             is SignInOutcome.KeepData ->
                 local.value.copy(decision = AccountDecision.KeepData(outcome.new, outcome.counts))
             is SignInOutcome.CheckPending ->
-                local.value.copy(phase = SignInPhase.CheckPending(outcome.pending.user.login, repeated = retried))
+                local.value.copy(phase = SignInPhase.CheckPending(outcome.pending.user.login, repeated = held != null))
             null -> local.value.copy(phase = failurePhase(result.exceptionOrNull()))
         }
     }
