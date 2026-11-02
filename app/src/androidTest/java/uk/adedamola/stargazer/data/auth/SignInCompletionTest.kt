@@ -19,6 +19,7 @@ import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.ui.AuthState
 import uk.adedamola.stargazer.ui.NavigationViewModel
 import uk.adedamola.stargazer.ui.screens.SignInPhase
+import uk.adedamola.stargazer.ui.screens.SignInUiState
 import uk.adedamola.stargazer.ui.screens.SignInViewModel
 
 /** After approval: `GET /user`, the account record, the encrypted key, then Home. */
@@ -112,5 +113,51 @@ class SignInCompletionTest {
         assertEquals(FIXTURE_USER_ID, db.accountDao().get()!!.userId)
         withTimeout(5_000) { viewModel.uiState.first { it.phase == SignInPhase.Idle && it.userCode == null } }
         assertEquals(1, api.requestCount)
+    }
+
+    @Test
+    fun uncheckedEarlierSignInIsRetriedWithTheSameApprovalAndOneCode() = runBlocking<Unit> {
+        val oldToken = "old-pasted-token-fixture"
+        legacy.seedOldToken(oldToken)
+        var oldAnswer = Scripted(503)
+        network.answer = { request ->
+            when {
+                request.url.encodedPath != "/user" -> Scripted(404)
+                request.header("Authorization") == "Bearer $oldToken" -> oldAnswer
+                else -> Scripted(200, userJson)
+            }
+        }
+        val api = FakeDeviceFlowApi(interval = 1)
+        api.script({ token(key) })
+        val viewModel = SignInViewModel(DeviceFlowSignIn(api, "Iv-test-client"), newCompleter(), session)
+        val navigation = NavigationViewModel(keys.tokenManager)
+
+        viewModel.signIn()
+
+        withTimeout(15_000) { viewModel.uiState.first { it.phase is SignInPhase.CheckPending } }
+        assertEquals(SignInPhase.CheckPending(login = "fixture-login", repeated = false), viewModel.uiState.value.phase)
+        assertTrue("Try again is ready", viewModel.uiState.value.actionEnabled)
+        assertNull("nothing stored yet", keys.tokenManager.currentKey())
+
+        viewModel.retryCheck()
+
+        withTimeout(10_000) { viewModel.uiState.first { it.phase == SignInPhase.CheckPending("fixture-login", repeated = true) } }
+        assertNull(keys.tokenManager.currentKey())
+
+        oldAnswer = Scripted(200, userJson)
+        viewModel.retryCheck()
+
+        withTimeout(10_000) { navigation.authState.first { it == AuthState.Authenticated } }
+        assertEquals(key, keys.tokenManager.currentKey())
+        assertEquals(FIXTURE_USER_ID, db.accountDao().get()!!.userId)
+        assertNull("old token deleted", legacy.store.oldToken())
+        withTimeout(5_000) { viewModel.uiState.first { it.phase == SignInPhase.Idle && it.userCode == null } }
+        assertEquals("one device code for the whole sign-in", 1, api.requestCount)
+    }
+
+    @Test
+    fun recheckingDisablesTheButton() {
+        assertFalse(SignInUiState(phase = SignInPhase.Rechecking("fixture-login")).actionEnabled)
+        assertTrue(SignInUiState(phase = SignInPhase.CheckPending("fixture-login", repeated = false)).actionEnabled)
     }
 }
