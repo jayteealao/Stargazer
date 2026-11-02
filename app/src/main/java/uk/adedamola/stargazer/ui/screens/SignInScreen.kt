@@ -195,15 +195,15 @@ fun SignInScreen(
                 SignInPhase.Expired -> {
                     UserCode(code = state.userCode.orEmpty(), expired = true)
                     Spacer(modifier = Modifier.height(16.dp))
-                    StatusText("CODE_EXPIRED — this code is older than 15 minutes.", FactoryYellow, announce = true)
+                    StatusText(AnnotatedString("CODE_EXPIRED — this code is older than 15 minutes."), FactoryYellow, announce = true)
                 }
                 SignInPhase.Denied -> ErrorLines(
-                    "ACCESS_DENIED — GitHub reports that the request was cancelled.",
+                    AnnotatedString("ACCESS_DENIED — GitHub reports that the request was cancelled."),
                     "You are not signed in. Start again when you are ready."
                 )
-                SignInPhase.Offline -> ErrorLines("NO_CONNECTION — connect to the internet to get a code.", null)
+                SignInPhase.Offline -> ErrorLines(AnnotatedString("NO_CONNECTION — connect to the internet to get a code."), null)
                 is SignInPhase.GitHubError -> ErrorLines(
-                    gitHubErrorText(phase.label),
+                    AnnotatedString(gitHubErrorText(phase.label)),
                     "code ${phase.label}"
                 )
                 SignInPhase.NoBrowser -> {
@@ -212,9 +212,9 @@ fun SignInScreen(
                     HintLine("no browser found on this phone · ${formatLeft(state.secondsLeft)} left")
                     Spacer(modifier = Modifier.height(20.dp))
                     Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-                        StatusText("On any device, open", FactoryTextWhite)
+                        StatusText(AnnotatedString("On any device, open"), FactoryTextWhite)
                         Spacer(modifier = Modifier.height(8.dp))
-                        StatusText(safeVerificationUri(state.verificationUri).toString().removePrefix("https://"), FactoryCyan)
+                        StatusText(AnnotatedString(safeVerificationUri(state.verificationUri).toString().removePrefix("https://")), FactoryCyan)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     HintLine("and enter the code above.")
@@ -395,10 +395,6 @@ private fun NewCodeButton(onClick: () -> Unit, enabled: Boolean) {
 }
 
 @Composable
-private fun StatusText(text: String, color: Color, announce: Boolean = false) =
-    StatusText(AnnotatedString(text), color, announce)
-
-@Composable
 private fun StatusText(text: AnnotatedString, color: Color, announce: Boolean = false) {
     Text(
         text = text,
@@ -451,9 +447,6 @@ private fun RequestingBody() {
 }
 
 /** A yellow SCREAMING_SNAKE status with its icon, then plain words in grey. */
-@Composable
-private fun ErrorLines(status: String, detail: String?) = ErrorLines(AnnotatedString(status), detail)
-
 @Composable
 private fun ErrorLines(status: AnnotatedString, detail: String?) {
     // One node, read out as soon as it appears: focus stays on the button below.
