@@ -227,9 +227,12 @@ fun SignInScreen(
                     NewCodeButton(onClick = onSignIn, enabled = state.actionEnabled)
                 }
                 is SignInPhase.Rechecking -> {
-                    HintLine("checking your earlier sign-in…", large = true)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    HintLine("approved as @${phase.login}")
+                    // Read out when the check starts: the error lines leave and the button turns off.
+                    Column(Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+                        HintLine("checking your earlier sign-in…", large = true)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        HintLine("approved as @${phase.login}")
+                    }
                 }
             }
 
