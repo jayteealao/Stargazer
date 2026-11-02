@@ -7,13 +7,10 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingState
 import androidx.paging.RemoteMediator
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -28,18 +25,13 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import retrofit2.HttpException
-import uk.adedamola.stargazer.data.di.SecureStorageModule
 import uk.adedamola.stargazer.data.local.database.AppDatabase
 import uk.adedamola.stargazer.data.paging.StarredReposRemoteMediator
 import uk.adedamola.stargazer.data.remote.GitHubErrorText
 import uk.adedamola.stargazer.ui.AuthState
 import uk.adedamola.stargazer.ui.NavigationViewModel
-import java.io.File
 import java.io.IOException
-import java.security.KeyStore
-import java.security.KeyStoreException
 import java.util.TimeZone
-import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -197,38 +189,8 @@ class AccessEndedTest {
         assertTrue(session.accessEnded.value)
     }
 
-    /** A real key store over its own file whose decrypt fails while [failing] is true. */
-    private class FlakyKeys {
-        private val context = InstrumentationRegistry.getInstrumentation().targetContext
-        private val alias = "test_alias_" + UUID.randomUUID()
-        private val dir = File(context.cacheDir, "flaky-" + UUID.randomUUID()).apply { mkdirs() }
-        private val job = SupervisorJob()
-        private val scope = CoroutineScope(job + Dispatchers.IO)
-        private val dataStore = SecureStorageModule.createAccessKeyDataStore(scope) { File(dir, "key.preferences_pb") }
-        private val real = AndroidKeystoreCipher(alias)
-        @Volatile var failing = false
-        private val cipher = object : AccessKeyCipher {
-            override fun encrypt(plain: String): ByteArray = real.encrypt(plain)
-            override fun decrypt(blob: ByteArray): String {
-                if (failing) throw KeyStoreException("busy")
-                return real.decrypt(blob)
-            }
-            override fun deleteKey() = real.deleteKey()
-        }
-
-        /** A new manager over the same file, as a new launch of the app would build it. */
-        fun manager() = TokenManager(dataStore, cipher, scope)
-
-        fun close() = runBlocking {
-            job.cancelAndJoin()
-            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.run { if (containsAlias(alias)) deleteEntry(alias) }
-            dir.deleteRecursively()
-            Unit
-        }
-    }
-
-    private fun withFlakyKeys(block: suspend CoroutineScope.(FlakyKeys) -> Unit) = runBlocking<Unit> {
-        val flaky = FlakyKeys()
+    private fun withFlakyKeys(block: suspend CoroutineScope.(FlakyKeyStore) -> Unit) = runBlocking<Unit> {
+        val flaky = FlakyKeyStore()
         try { block(this, flaky) } finally { flaky.close() }
     }
 
@@ -242,7 +204,7 @@ class AccessEndedTest {
         val watcher = launch(Dispatchers.IO) { navigation.authState.collect { seen += it } }
 
         // A store change while the Keystore is busy: the next read of the key fails.
-        flaky.failing = true
+        flaky.failingReads = true
         manager.saveToken(key)
         // Past the three re-reads, to the final unavailable read.
         withTimeout(10_000) { manager.keyState.first { it == KeyState.Unavailable(final = true) } }
@@ -255,13 +217,13 @@ class AccessEndedTest {
     @Test
     fun launchWithUnavailableReadsKeepsLoadingThenOpensHome() = withFlakyKeys { flaky ->
         flaky.manager().saveToken(key)
-        flaky.failing = true
+        flaky.failingReads = true
 
         val navigation = NavigationViewModel(flaky.manager())
         delay(1_500)
         assertEquals("the splash stays while the key is read again", AuthState.Loading, navigation.authState.value)
 
-        flaky.failing = false
+        flaky.failingReads = false
         withTimeout(5_000) { navigation.authState.first { it != AuthState.Loading } }
         assertEquals(AuthState.Authenticated, navigation.authState.value)
     }
@@ -269,7 +231,7 @@ class AccessEndedTest {
     @Test
     fun launchWithOnlyUnavailableReadsOpensSignIn() = withFlakyKeys { flaky ->
         flaky.manager().saveToken(key)
-        flaky.failing = true
+        flaky.failingReads = true
         val started = SystemClock.elapsedRealtime()
 
         val navigation = NavigationViewModel(flaky.manager())
