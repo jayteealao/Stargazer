@@ -225,6 +225,7 @@ fun SignInScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     HintLine("and enter the code above.")
                 }
+                is SignInPhase.CheckPending, is SignInPhase.Rechecking -> Unit
             }
 
             Spacer(modifier = Modifier.weight(0.7f))
@@ -236,6 +237,7 @@ fun SignInScreen(
                 SignInPhase.Expired -> "Get a new code" to onSignIn
                 SignInPhase.Offline, is SignInPhase.GitHubError -> "Try again" to onSignIn
                 SignInPhase.NoBrowser -> "Copy code" to onCopyCode
+                is SignInPhase.CheckPending, is SignInPhase.Rechecking -> "Try again" to onSignIn
             }
             StargazerButton(text = label, onClick = action, enabled = state.actionEnabled)
             Spacer(modifier = Modifier.height(20.dp))

@@ -39,6 +39,15 @@ sealed interface SignInPhase {
     data object Offline : SignInPhase
     data class GitHubError(val label: String) : SignInPhase
     data object NoBrowser : SignInPhase
+
+    /**
+     * GitHub approved [login], but the earlier sign-in could not be checked. The approval is kept;
+     * [repeated] is true once a retry failed too.
+     */
+    data class CheckPending(val login: String, val repeated: Boolean) : SignInPhase
+
+    /** The earlier sign-in is checked again with the kept approval of [login]. */
+    data class Rechecking(val login: String) : SignInPhase
 }
 
 /** A question the person must answer before an approved sign-in finishes. */
@@ -60,7 +69,7 @@ data class SignInUiState(
 ) {
     /** The primary button does nothing while a request is in flight. */
     val actionEnabled: Boolean
-        get() = phase != SignInPhase.Requesting && phase != SignInPhase.Completing
+        get() = phase != SignInPhase.Requesting && phase != SignInPhase.Completing && phase !is SignInPhase.Rechecking
 }
 
 const val DEVICE_VERIFICATION_URI = "https://github.com/login/device"
@@ -75,8 +84,9 @@ class SignInViewModel @Inject constructor(
     private val local = MutableStateFlow(SignInUiState())
     private var flowJob: Job? = null
     private var tickJob: Job? = null
+    private var checkJob: Job? = null
 
-    /** The approved key waiting for the answer to [SignInUiState.decision]; memory only. */
+    /** The approved key waiting for the answer to [SignInUiState.decision] or for a retried check; memory only. */
     private var pending: PendingSignIn? = null
 
     val uiState: StateFlow<SignInUiState> =
@@ -87,6 +97,7 @@ class SignInViewModel @Inject constructor(
     fun signIn() {
         flowJob?.cancel()
         tickJob?.cancel()
+        checkJob?.cancel()
         pending = null
         session.acknowledgeAccessEnded()
         flowJob = viewModelScope.launch {
@@ -118,27 +129,44 @@ class SignInViewModel @Inject constructor(
             is DeviceFlowStep.Approved -> {
                 tickJob?.cancel()
                 local.update { it.copy(phase = SignInPhase.Completing) }
-                val result = completer.complete(step.key)
-                local.value = when (val outcome = result.getOrNull()) {
-                    // Home opens because the key is stored; this screen is ready for a later sign-in.
-                    SignInOutcome.Done -> SignInUiState()
-                    is SignInOutcome.AccountChange -> {
-                        pending = outcome.pending
-                        local.value.copy(decision = AccountDecision.ChangeAccount(outcome.old, outcome.new, outcome.counts))
-                    }
-                    is SignInOutcome.KeepData -> {
-                        pending = outcome.pending
-                        local.value.copy(decision = AccountDecision.KeepData(outcome.new, outcome.counts))
-                    }
-                    // The screen for a kept approval comes with its own phase.
-                    is SignInOutcome.CheckPending -> local.value.copy(phase = SignInPhase.Offline)
-                    null -> local.value.copy(phase = failurePhase(result.exceptionOrNull()))
-                }
+                onOutcome(completer.complete(step.key), retried = false)
             }
             DeviceFlowStep.Expired -> end(SignInPhase.Expired)
             DeviceFlowStep.Denied -> end(SignInPhase.Denied)
             DeviceFlowStep.Offline -> end(SignInPhase.Offline)
             is DeviceFlowStep.GitHubError -> end(SignInPhase.GitHubError(step.label))
+        }
+    }
+
+    /**
+     * Try again on the CheckPending phase: checks the earlier sign-in again with the kept
+     * approval. No new code is requested.
+     */
+    fun retryCheck() {
+        val held = pending ?: return
+        if (local.value.phase !is SignInPhase.CheckPending) return
+        local.update { it.copy(phase = SignInPhase.Rechecking(held.user.login)) }
+        checkJob = viewModelScope.launch { onOutcome(completer.recheck(held), retried = true) }
+    }
+
+    private fun onOutcome(result: Result<SignInOutcome>, retried: Boolean) {
+        val outcome = result.getOrNull()
+        pending = when (outcome) {
+            is SignInOutcome.AccountChange -> outcome.pending
+            is SignInOutcome.KeepData -> outcome.pending
+            is SignInOutcome.CheckPending -> outcome.pending
+            SignInOutcome.Done, null -> null
+        }
+        local.value = when (outcome) {
+            // Home opens because the key is stored; this screen is ready for a later sign-in.
+            SignInOutcome.Done -> SignInUiState()
+            is SignInOutcome.AccountChange ->
+                local.value.copy(decision = AccountDecision.ChangeAccount(outcome.old, outcome.new, outcome.counts))
+            is SignInOutcome.KeepData ->
+                local.value.copy(decision = AccountDecision.KeepData(outcome.new, outcome.counts))
+            is SignInOutcome.CheckPending ->
+                local.value.copy(phase = SignInPhase.CheckPending(outcome.pending.user.login, repeated = retried))
+            null -> local.value.copy(phase = failurePhase(result.exceptionOrNull()))
         }
     }
 
