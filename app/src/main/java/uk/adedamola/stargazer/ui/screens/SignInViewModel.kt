@@ -130,6 +130,8 @@ class SignInViewModel @Inject constructor(
                         pending = outcome.pending
                         local.value.copy(decision = AccountDecision.KeepData(outcome.new, outcome.counts))
                     }
+                    // The screen for a kept approval comes with its own phase.
+                    is SignInOutcome.CheckPending -> local.value.copy(phase = SignInPhase.Offline)
                     null -> local.value.copy(phase = failurePhase(result.exceptionOrNull()))
                 }
             }

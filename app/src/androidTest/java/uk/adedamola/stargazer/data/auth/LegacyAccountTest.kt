@@ -11,7 +11,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import uk.adedamola.stargazer.data.local.database.AppDatabase
-import java.io.IOException
 
 /**
  * The update from the pasted-token version: a working old token identifies the account once and
@@ -161,17 +160,71 @@ class LegacyAccountTest {
     }
 
     @Test
-    fun oldTokenStillUnanswerableFailsTheSignInAndChangesNothing() = runBlocking<Unit> {
+    fun unanswerableOldTokenReturnsCheckPendingAndChangesNothing() = runBlocking<Unit> {
         oldAnswer = Scripted(503)
         newUser = userJson(SECOND_USER_ID, "second-login")
         val before = localCounts(db)
 
-        val result = newCompleter().complete(key)
+        val outcome = newCompleter().complete(key).getOrThrow()
 
-        assertTrue(result.exceptionOrNull() is IOException)
+        val held = (outcome as SignInOutcome.CheckPending).pending
+        assertEquals("the approval is kept", key, held.key)
+        assertEquals("second-login", held.user.login)
+        assertFalse("the key never shows in text", outcome.toString().contains(key))
         assertNull(keys.tokenManager.currentKey())
         assertEquals(before, localCounts(db))
         assertEquals(oldToken, legacy.store.oldToken())
         assertFalse(legacy.store.ownerUnknown())
+    }
+
+    @Test
+    fun recheckWithTheSameKeyStaysPendingWhileTheOldTokenIsUnanswerable() = runBlocking<Unit> {
+        oldAnswer = Scripted(-1)
+        val completer = newCompleter()
+        val held = (completer.complete(key).getOrThrow() as SignInOutcome.CheckPending).pending
+        val before = localCounts(db)
+
+        val again = completer.recheck(held).getOrThrow()
+
+        assertTrue(again is SignInOutcome.CheckPending)
+        assertNull(keys.tokenManager.currentKey())
+        assertEquals(before, localCounts(db))
+        assertEquals(oldToken, legacy.store.oldToken())
+    }
+
+    @Test
+    fun recheckAfterTheOldTokenAnswersContinuesToDone() = runBlocking<Unit> {
+        oldAnswer = Scripted(503)
+        val completer = newCompleter()
+        val held = (completer.complete(key).getOrThrow() as SignInOutcome.CheckPending).pending
+        val newKeyReads = network.requests.count { it.header("Authorization") == "Bearer $key" }
+
+        oldAnswer = Scripted(200, userJson(FIXTURE_USER_ID, "fixture-login"))
+        val outcome = completer.recheck(held).getOrThrow()
+
+        assertEquals(SignInOutcome.Done, outcome)
+        assertNull("old token deleted", legacy.store.oldToken())
+        assertEquals(FIXTURE_USER_ID, db.accountDao().get()!!.userId)
+        assertEquals(key, keys.tokenManager.currentKey())
+        assertEquals(
+            "the recheck reuses the account that the key already read",
+            newKeyReads,
+            network.requests.count { it.header("Authorization") == "Bearer $key" }
+        )
+    }
+
+    @Test
+    fun recheckThatFindsADeadOldTokenAsksKeepOrRemove() = runBlocking<Unit> {
+        oldAnswer = Scripted(503)
+        newUser = userJson(SECOND_USER_ID, "second-login")
+        val completer = newCompleter()
+        val held = (completer.complete(key).getOrThrow() as SignInOutcome.CheckPending).pending
+
+        oldAnswer = Scripted(401)
+        val ask = completer.recheck(held).getOrThrow() as SignInOutcome.KeepData
+
+        assertEquals("second-login", ask.new.login)
+        assertTrue(legacy.store.ownerUnknown())
+        assertNull("no key while the question is open", keys.tokenManager.currentKey())
     }
 }
