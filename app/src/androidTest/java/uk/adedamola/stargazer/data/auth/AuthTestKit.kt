@@ -56,6 +56,7 @@ import kotlinx.serialization.json.putJsonObject
 import java.io.File
 import java.io.IOException
 import java.security.KeyStore
+import java.security.KeyStoreException
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -123,6 +124,43 @@ class TokenManagerFixture {
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.run {
             if (containsAlias(alias)) deleteEntry(alias)
         }
+        dir.deleteRecursively()
+        Unit
+    }
+}
+
+/**
+ * A real key store over its own file whose Keystore is busy on demand: decrypt fails while
+ * [failingReads] is true, encrypt while [failingSaves] is true. [manager] builds a new
+ * [TokenManager] over the same file, as a new launch of the app would.
+ */
+class FlakyKeyStore {
+    private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val alias = "test_alias_" + UUID.randomUUID()
+    private val dir = File(context.cacheDir, "flaky-" + UUID.randomUUID()).apply { mkdirs() }
+    private val job = SupervisorJob()
+    private val scope = CoroutineScope(job + Dispatchers.IO)
+    private val dataStore = SecureStorageModule.createAccessKeyDataStore(scope) { File(dir, "key.preferences_pb") }
+    private val real = AndroidKeystoreCipher(alias)
+    @Volatile var failingReads = false
+    @Volatile var failingSaves = false
+    private val cipher = object : AccessKeyCipher {
+        override fun encrypt(plain: String): ByteArray {
+            if (failingSaves) throw KeyStoreException("busy")
+            return real.encrypt(plain)
+        }
+        override fun decrypt(blob: ByteArray): String {
+            if (failingReads) throw KeyStoreException("busy")
+            return real.decrypt(blob)
+        }
+        override fun deleteKey() = real.deleteKey()
+    }
+
+    fun manager() = TokenManager(dataStore, cipher, scope)
+
+    fun close() = runBlocking {
+        job.cancelAndJoin()
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.run { if (containsAlias(alias)) deleteEntry(alias) }
         dir.deleteRecursively()
         Unit
     }

@@ -168,62 +168,32 @@ class SignInCompletionTest {
             }
         }
         // The key cannot be stored while the Keystore is busy: the retried check fails.
-        val saving = CipherWrappedKeys()
+        val keyStore = FlakyKeyStore()
+        val saving = keyStore.manager()
         val api = FakeDeviceFlowApi(interval = 1)
         api.script({ token(key) })
-        val completer = completer(db, saving.manager, apiService(saving.manager, network, session), legacy.store)
+        val completer = completer(db, saving, apiService(saving, network, session), legacy.store)
         val viewModel = SignInViewModel(DeviceFlowSignIn(api, "Iv-test-client"), completer, session)
         try {
             viewModel.signIn()
             withTimeout(15_000) { viewModel.uiState.first { it.phase is SignInPhase.CheckPending } }
 
             oldAnswer = Scripted(200, userJson)
-            saving.failing = true
+            keyStore.failingSaves = true
             viewModel.retryCheck()
 
             withTimeout(10_000) { viewModel.uiState.first { it.phase == SignInPhase.CheckPending("fixture-login", repeated = true) } }
             assertTrue("Try again is ready again", viewModel.uiState.value.actionEnabled)
-            assertNull("nothing stored", saving.manager.currentKey())
+            assertNull("nothing stored", saving.currentKey())
 
-            saving.failing = false
+            keyStore.failingSaves = false
             viewModel.retryCheck()
 
             withTimeout(10_000) { viewModel.uiState.first { it.phase == SignInPhase.Idle && it.userCode == null } }
-            assertEquals(key, saving.manager.currentKey())
+            assertEquals(key, saving.currentKey())
             assertEquals("the kept approval finished the sign-in", 1, api.requestCount)
         } finally {
-            saving.close()
-        }
-    }
-
-    /** A key store over its own file whose encrypt fails while [failing] is true. */
-    private class CipherWrappedKeys {
-        private val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
-        private val alias = "test_alias_" + java.util.UUID.randomUUID()
-        private val dir = java.io.File(context.cacheDir, "saving-" + java.util.UUID.randomUUID()).apply { mkdirs() }
-        private val job = kotlinx.coroutines.SupervisorJob()
-        private val scope = kotlinx.coroutines.CoroutineScope(job + kotlinx.coroutines.Dispatchers.IO)
-        private val real = AndroidKeystoreCipher(alias)
-        @Volatile var failing = false
-        val manager = TokenManager(
-            uk.adedamola.stargazer.data.di.SecureStorageModule.createAccessKeyDataStore(scope) { java.io.File(dir, "key.preferences_pb") },
-            object : AccessKeyCipher {
-                override fun encrypt(plain: String): ByteArray {
-                    if (failing) throw java.security.KeyStoreException("busy")
-                    return real.encrypt(plain)
-                }
-                override fun decrypt(blob: ByteArray): String = real.decrypt(blob)
-                override fun deleteKey() = real.deleteKey()
-            },
-            scope
-        )
-
-        fun close() = runBlocking {
-            job.cancel()
-            java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-                .run { if (containsAlias(alias)) deleteEntry(alias) }
-            dir.deleteRecursively()
-            Unit
+            keyStore.close()
         }
     }
 
