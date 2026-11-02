@@ -21,8 +21,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
+import uk.adedamola.stargazer.data.auth.KeyState
 import uk.adedamola.stargazer.data.auth.TokenManager
 import javax.inject.Inject
 
@@ -44,10 +45,19 @@ sealed interface AuthState {
 class NavigationViewModel @Inject constructor(
     tokenManager: TokenManager
 ) : ViewModel() {
-    val authState: StateFlow<AuthState> = tokenManager.token
-        .map { token ->
-            if (token != null && token.isNotBlank()) AuthState.Authenticated
-            else AuthState.Unauthenticated
+    /**
+     * A key that cannot be read for now keeps the last known state, so a short Keystore failure
+     * never rebuilds the screens on sign-in. At launch it stays Loading, and so keeps the splash,
+     * while the key is read again; when every re-read fails, sign-in opens.
+     */
+    val authState: StateFlow<AuthState> = tokenManager.keyState
+        .scan(AuthState.Loading as AuthState) { last, key ->
+            when (key) {
+                KeyState.Present -> AuthState.Authenticated
+                KeyState.Absent -> AuthState.Unauthenticated
+                is KeyState.Unavailable ->
+                    if (key.final && last == AuthState.Loading) AuthState.Unauthenticated else last
+            }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AuthState.Loading)
 }
