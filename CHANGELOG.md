@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-06
+
+### Fixed
+- Updating from 1.1: when the app cannot check your earlier sign-in after you approve it on GitHub, it keeps your approval. "Try again" finishes the sign-in with no new code, and `[ NEW_CODE ]` starts over
+- A short failure to read the saved GitHub key no longer sends you to the sign-in screen: you stay where you are, and at launch the app reads the key again for up to 3 seconds
+
 ## [1.2.0] - 2026-10-31
 
 ### Added
